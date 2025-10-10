@@ -113,6 +113,19 @@ class STTService:
             assert model is not None, "Whisper model must be initialized before transcription"
             logger.info(f"Starting transcription of {file_path}")
 
+            # Debug logging for STT parameters
+            if self.settings.debug:
+                logger.debug("=" * 80)
+                logger.debug("STT TRANSCRIPTION:")
+                logger.debug(f"File: {file_path}")
+                logger.debug(f"Language: {language}")
+                logger.debug(f"Beam Size: {beam_size}")
+                logger.debug(f"VAD Filter: {vad_filter}")
+                logger.debug(f"Model: {self.settings.whisper_model}")
+                logger.debug(f"Device: {self.settings.device}")
+                logger.debug(f"Compute Type: {self.settings.compute_type}")
+                logger.debug("=" * 80)
+
             # Transcribe with Faster-Whisper
             segments, info = model.transcribe(
                 str(file_path),
@@ -129,6 +142,22 @@ class STTService:
                 f"Transcription completed: {len(transcript)} characters, "
                 f"language={info.language} (probability={info.language_probability:.2f})"
             )
+
+            # Debug logging for transcription result
+            if self.settings.debug:
+                logger.debug("=" * 80)
+                logger.debug("STT RESULT:")
+                logger.debug(
+                    f"Detected Language: {info.language} (confidence: {info.language_probability:.2%})"
+                )
+                logger.debug(f"Duration: {info.duration:.2f}s")
+                logger.debug(f"Transcript Length: {len(transcript)} characters")
+                logger.debug(
+                    f"Transcript Preview:\n{transcript[:500]}..."
+                    if len(transcript) > 500
+                    else f"Transcript:\n{transcript}"
+                )
+                logger.debug("=" * 80)
 
             return transcript
 

@@ -126,6 +126,18 @@ class TTSService:
         job_id: int | None,
     ) -> str:
         """Blocking audio generation executed inside a worker thread."""
+        # Debug logging for TTS parameters
+        if settings.debug:
+            logger.debug("=" * 80)
+            logger.debug("TTS GENERATION:")
+            logger.debug(f"Voice ID: {voice_id}")
+            logger.debug(f"Language: {language}")
+            logger.debug(f"Job ID: {job_id}")
+            logger.debug(f"Engine: {self.engine.__class__.__name__}")
+            logger.debug(f"Text Length: {len(text)} characters")
+            logger.debug(f"Text Preview:\n{text[:500]}..." if len(text) > 500 else f"Text:\n{text}")
+            logger.debug("=" * 80)
+
         if len(text) > 10000:
             logger.info("Text is long, splitting into chunks")
             return self._generate_long_audio_sync(
@@ -138,6 +150,15 @@ class TTSService:
 
         try:
             output_path = self.engine.generate_audio(text, voice_id, language)
+
+            # Debug logging for TTS result
+            if settings.debug:
+                logger.debug("=" * 80)
+                logger.debug("TTS RESULT:")
+                logger.debug(f"Output Path: {output_path}")
+                logger.debug(f"File Size: {Path(output_path).stat().st_size / 1024:.2f} KB")
+                logger.debug("=" * 80)
+
             if progress_callback:
                 progress_callback(1.0)
             return output_path

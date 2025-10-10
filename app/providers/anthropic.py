@@ -100,6 +100,17 @@ class AnthropicProvider(BaseLLMProvider):
                     f"{source_lang} -> {target_lang}, {len(text)} chars"
                 )
 
+                # Log request details in debug mode
+                if self.settings.debug:
+                    logger.info("=" * 80)
+                    logger.info("LLM REQUEST:")
+                    logger.info(f"Model: {self.model}")
+                    logger.info("Max Tokens: 4096")
+                    logger.info(
+                        f"Prompt:\n{prompt[:500]}..." if len(prompt) > 500 else f"Prompt:\n{prompt}"
+                    )
+                    logger.info("=" * 80)
+
                 # Call Claude API
                 response = await asyncio.to_thread(
                     self.client.messages.create,
@@ -120,6 +131,20 @@ class AnthropicProvider(BaseLLMProvider):
                 logger.info(
                     f"Translation successful. Tokens - Input: {input_tokens}, Output: {output_tokens}"
                 )
+
+                # Log response details in debug mode
+                if self.settings.debug:
+                    logger.debug("=" * 80)
+                    logger.debug("LLM RESPONSE:")
+                    logger.debug(f"Input Tokens: {input_tokens}")
+                    logger.debug(f"Output Tokens: {output_tokens}")
+                    logger.debug(f"Stop Reason: {response.stop_reason}")
+                    logger.debug(
+                        f"Translated Text:\n{translated_text[:500]}..."
+                        if len(translated_text) > 500
+                        else f"Translated Text:\n{translated_text}"
+                    )
+                    logger.debug("=" * 80)
 
                 return translated_text
 
