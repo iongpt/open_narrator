@@ -73,6 +73,102 @@ Perfect for translating audiobooks, podcasts, educational content, or converting
 
 ### Installation
 
+Choose one of the following installation methods:
+
+#### Option 1: Using Pre-built Docker Image (Recommended)
+
+The easiest way to get started - no need to clone the repository!
+
+**Note:** Pre-built images are available after the first release. Replace `yourusername` with the actual GitHub username.
+
+1. **Create a project directory**
+
+```bash
+mkdir opennarrator && cd opennarrator
+```
+
+2. **Create environment file**
+
+```bash
+cat > .env << 'EOF'
+# Required: Your Anthropic API key
+ANTHROPIC_API_KEY=your_api_key_here
+
+# Optional: Model configurations (defaults shown)
+WHISPER_MODEL=large-v3
+WHISPER_COMPUTE_TYPE=auto
+TTS_ENGINE=piper
+MAX_UPLOAD_SIZE_MB=500
+DEBUG=false
+EOF
+```
+
+Edit the `.env` file and add your Anthropic API key.
+
+3. **Create docker-compose.yml**
+
+```bash
+cat > docker-compose.yml << 'EOF'
+version: '3.8'
+
+services:
+  app:
+    image: ghcr.io/yourusername/open_narrator:latest
+    container_name: opennarrator
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+    # Uncomment for GPU support (requires NVIDIA Container Toolkit)
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+EOF
+```
+
+4. **Start the application**
+
+```bash
+docker-compose up -d
+```
+
+5. **Access the web interface**
+
+Open your browser and navigate to: `http://localhost:8000`
+
+**Using a specific version:**
+```bash
+# Use latest stable release
+docker-compose pull
+docker-compose up -d
+
+# Use specific version (replace with actual version)
+# Edit docker-compose.yml and change image to:
+# image: ghcr.io/yourusername/open_narrator:v1.0.0
+```
+
+**Alternative: Using docker run** (without docker-compose):
+```bash
+docker run -d \
+  --name opennarrator \
+  -p 8000:8000 \
+  -e ANTHROPIC_API_KEY=your_api_key_here \
+  -v $(pwd)/data:/app/data \
+  --restart unless-stopped \
+  ghcr.io/yourusername/open_narrator:latest
+```
+
+#### Option 2: Build from Source
+
+For development or customization:
+
 1. **Clone the repository**
 
 ```bash
@@ -232,7 +328,17 @@ deploy:
 - For very large files, processing may take longer due to rate limits
 - Consider upgrading your Anthropic API tier for higher limits
 
-**4. Docker container fails to start**
+**4. Docker image not found**
+```bash
+# Error: manifest for ghcr.io/yourusername/open_narrator:latest not found
+
+# Cause: Image hasn't been published yet or username is incorrect
+# Solution 1: Use build from source (Option 2)
+# Solution 2: Wait for first release to be published
+# Solution 3: Check you're using the correct GitHub username
+```
+
+**5. Docker container fails to start**
 ```bash
 # Check logs
 docker-compose logs -f
@@ -243,23 +349,23 @@ docker-compose logs -f
 # - Check Docker has enough memory allocated (8GB+ recommended)
 ```
 
-**5. Models not downloading**
+**6. Models not downloading**
 - Ensure you have stable internet connection
 - Verify you have at least 20GB free disk space
 - Check Docker volume mounts are correct
 
-**6. Poor audio quality in output**
+**7. Poor audio quality in output**
 - Try a different voice for the target language
 - For audio translation: Ensure input audio is high quality (64kbps+ MP3)
 - For text-to-audiobook: Verify text extraction was successful (check job logs)
 - Check that the translation is accurate (poor translation = poor narration)
 
-**7. Slow processing (CPU-only)**
+**8. Slow processing (CPU-only)**
 - Expected processing time: ~10-15 minutes per hour of audio on modern CPU
 - Consider using GPU for 5-10x speedup
 - Use smaller Whisper model: `WHISPER_MODEL=medium` or `small`
 
-**8. Text extraction fails**
+**9. Text extraction fails**
 - **PDF issues**: Some PDFs are scanned images without text. Use OCR software first or try a text-based PDF
 - **EPUB/MOBI**: Ensure the ebook file is not DRM-protected
 - **DOCX**: Modern DOCX files work best. For older DOC files, convert to DOCX first
