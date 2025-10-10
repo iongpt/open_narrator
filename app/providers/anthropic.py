@@ -119,11 +119,20 @@ class AnthropicProvider(BaseLLMProvider):
                     messages=[{"role": "user", "content": prompt}],
                 )
 
-                # Extract translated text
+                # Extract translated text from ALL content blocks
                 if not response.content:
                     raise RuntimeError("Empty response from Claude API")
 
-                translated_text = str(response.content[0].text)
+                # Join all text content blocks (Claude can return multiple blocks)
+                text_blocks = []
+                for block in response.content:
+                    if hasattr(block, "text") and block.text:
+                        text_blocks.append(str(block.text))
+
+                if not text_blocks:
+                    raise RuntimeError("No text content in Claude response")
+
+                translated_text = "".join(text_blocks)
 
                 # Log token usage
                 input_tokens = response.usage.input_tokens
@@ -132,11 +141,13 @@ class AnthropicProvider(BaseLLMProvider):
                     f"Translation successful. Tokens - Input: {input_tokens}, Output: {output_tokens}"
                 )
 
-                # Warn if translation was truncated due to max_tokens limit
+                # CRITICAL: Fail hard on truncation - incomplete translations are unacceptable
                 if response.stop_reason == "max_tokens":
-                    logger.error(
-                        f"Translation was truncated! Hit max_tokens limit ({output_tokens} tokens). "
-                        "The translation is incomplete. Consider increasing max_tokens or splitting the text into smaller chunks."
+                    raise RuntimeError(
+                        f"Translation was truncated due to max_tokens limit. "
+                        f"Output: {output_tokens} tokens. The translation is incomplete. "
+                        f"Recommendation: Split the text into smaller chunks (reduce max_tokens in config) "
+                        f"or increase translation_max_output_tokens setting."
                     )
 
                 # Log response details in debug mode
@@ -146,6 +157,7 @@ class AnthropicProvider(BaseLLMProvider):
                     logger.debug(f"Input Tokens: {input_tokens}")
                     logger.debug(f"Output Tokens: {output_tokens}")
                     logger.debug(f"Stop Reason: {response.stop_reason}")
+                    logger.debug(f"Content Blocks: {len(text_blocks)}")
                     logger.debug(
                         f"Translated Text:\n{translated_text[:500]}..."
                         if len(translated_text) > 500

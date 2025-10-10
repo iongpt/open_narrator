@@ -32,12 +32,29 @@ templates = Jinja2Templates(directory="app/templates")
 
 
 # File upload validation
+ALLOWED_AUDIO_EXTENSIONS = {
+    ".mp3",
+    ".wav",
+    ".m4a",
+    ".ogg",
+    ".flac",
+    ".mp4",
+}
+
 ALLOWED_AUDIO_TYPES = {
     "audio/mpeg",
     "audio/mp3",
     "audio/x-mp3",
     "audio/mpeg3",
     "audio/x-mpeg-3",
+    "audio/wav",
+    "audio/x-wav",
+    "audio/wave",
+    "audio/mp4",
+    "audio/m4a",
+    "audio/x-m4a",
+    "audio/ogg",
+    "audio/flac",
 }
 
 ALLOWED_TEXT_TYPES = {
@@ -48,6 +65,7 @@ ALLOWED_TEXT_TYPES = {
     "application/epub+zip",
     "application/x-mobipocket-ebook",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",  # DOCX
+    "application/msword",  # DOC
     "application/rtf",
     "text/rtf",
     "application/vnd.oasis.opendocument.text",  # ODT
@@ -60,6 +78,7 @@ ALLOWED_TEXT_EXTENSIONS = {
     ".epub",
     ".mobi",
     ".docx",
+    ".doc",
     ".rtf",
     ".odt",
     ".html",
@@ -91,18 +110,22 @@ def validate_file(file: UploadFile) -> str:
     filename_lower = file.filename.lower()
     file_extension = Path(filename_lower).suffix
 
-    # Check if it's an audio file
-    if filename_lower.endswith(".mp3") or file.content_type in ALLOWED_AUDIO_TYPES:
+    # Check if it's an audio file (by extension OR content-type)
+    if file_extension in ALLOWED_AUDIO_EXTENSIONS or file.content_type in ALLOWED_AUDIO_TYPES:
         return "audio"
 
-    # Check if it's a text file
+    # Check if it's a text file (by extension OR content-type)
     if file_extension in ALLOWED_TEXT_EXTENSIONS or file.content_type in ALLOWED_TEXT_TYPES:
         return "text"
 
-    # Invalid file type
+    # Invalid file type - provide helpful error message
     raise HTTPException(
         status_code=status.HTTP_400_BAD_REQUEST,
-        detail="Invalid file type. Allowed: MP3 audio or TXT/MD/PDF/EPUB/MOBI/DOCX/RTF/ODT/HTML text files",
+        detail=(
+            "Invalid file type. Allowed formats:\n"
+            f"Audio: {', '.join(sorted(ALLOWED_AUDIO_EXTENSIONS))}\n"
+            f"Text: {', '.join(sorted(ALLOWED_TEXT_EXTENSIONS))}"
+        ),
     )
 
 

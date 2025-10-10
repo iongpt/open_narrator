@@ -117,13 +117,23 @@ class TextExtractionService:
             for page_num in range(num_pages):
                 page = pdf_reader.pages[page_num]
                 page_text = page.extract_text()
-                if page_text.strip():
+
+                # Guard against None (image/scanned pages)
+                if page_text and page_text.strip():
                     text_parts.append(page_text)
+                else:
+                    logger.warning(
+                        f"Page {page_num + 1} has no extractable text (likely image/scanned page)"
+                    )
 
         text = "\n\n".join(text_parts)
 
         if not text.strip():
-            raise ValueError("No text could be extracted from PDF")
+            raise ValueError(
+                "No text could be extracted from PDF. "
+                "This may be a scanned/image-only PDF that requires OCR. "
+                "Consider using a PDF with selectable text or an OCR tool first."
+            )
 
         logger.info(f"Extracted {len(text)} characters from PDF")
         return text
@@ -193,30 +203,43 @@ class TextExtractionService:
         # Extract text from MOBI
         tempdir, filepath = mobi.extract(str(file_path))
 
-        # Read the extracted HTML files
-        text_parts = []
+        # Ensure cleanup even on errors
         try:
-            from bs4 import BeautifulSoup
+            # Read the extracted HTML files
+            text_parts = []
+            try:
+                from bs4 import BeautifulSoup
 
-            for html_file in Path(tempdir).rglob("*.html"):
-                with open(html_file, encoding="utf-8") as f:
-                    soup = BeautifulSoup(f.read(), "html.parser")
-                    file_text = cast(str, soup.get_text(separator="\n", strip=True))
-                    if file_text:
-                        text_parts.append(file_text)
-        except ImportError as e:
-            raise RuntimeError(
-                "BeautifulSoup4 is required for HTML parsing. "
-                "Install with: pip install beautifulsoup4"
-            ) from e
+                for html_file in Path(tempdir).rglob("*.html"):
+                    with open(html_file, encoding="utf-8") as f:
+                        soup = BeautifulSoup(f.read(), "html.parser")
+                        file_text = cast(str, soup.get_text(separator="\n", strip=True))
+                        if file_text:
+                            text_parts.append(file_text)
+            except ImportError as e:
+                raise RuntimeError(
+                    "BeautifulSoup4 is required for HTML parsing. "
+                    "Install with: pip install beautifulsoup4"
+                ) from e
 
-        text: str = "\n\n".join(text_parts)
+            text: str = "\n\n".join(text_parts)
 
-        if not text.strip():
-            raise ValueError("No text could be extracted from MOBI")
+            if not text.strip():
+                raise ValueError("No text could be extracted from MOBI")
 
-        logger.info(f"Extracted {len(text)} characters from MOBI")
-        return text
+            logger.info(f"Extracted {len(text)} characters from MOBI")
+            return text
+
+        finally:
+            # CRITICAL: Always clean up temp directory
+            import shutil
+
+            try:
+                if tempdir and Path(tempdir).exists():
+                    shutil.rmtree(tempdir)
+                    logger.debug(f"Cleaned up MOBI temp directory: {tempdir}")
+            except Exception as cleanup_error:
+                logger.warning(f"Failed to clean up MOBI temp directory {tempdir}: {cleanup_error}")
 
     def _extract_from_markdown(self, file_path: Path) -> str:
         """

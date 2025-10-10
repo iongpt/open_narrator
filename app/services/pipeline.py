@@ -163,32 +163,44 @@ async def process_audio(
                     )
                 )
 
+                # Capture event loop before entering worker thread
+                loop = asyncio.get_running_loop()
+
                 # Create progress callback for STT
                 def stt_progress_callback(segments_processed: int) -> None:
-                    """Update progress during transcription."""
+                    """Update progress during transcription (called from worker thread)."""
                     # Map segment progress to 0-30% range
                     # We don't know total segments upfront, so show incremental progress
                     # Cap at 28% to leave room for finalization
                     progress = min(28.0, segments_processed * 0.5)  # ~0.5% per segment
 
-                    # Update database (job is guaranteed to exist at this point)
-                    assert job is not None, "Job should not be None in callback"
-                    job.progress = progress
-                    db.commit()
+                    # Schedule DB update on main thread via call_soon_threadsafe
+                    def update_db_and_send_sse() -> None:
+                        """Runs on main event loop thread."""
+                        try:
+                            # job is guaranteed to be non-None at this point
+                            assert job is not None, "Job should not be None in callback"
+                            # Refresh job to avoid stale data
+                            db.refresh(job)
+                            job.progress = progress
+                            db.commit()
 
-                    # Send SSE update (non-blocking)
-                    _schedule_progress_task(
-                        send_progress_update(
-                            ProgressUpdate(
-                                job_id=job_id,
-                                status=JobStatus.TRANSCRIBING,
-                                progress=progress,
-                                message=f"Transcribing audio... ({segments_processed} segments processed)",
+                            # Schedule SSE update as async task (now safe - we're on main loop)
+                            asyncio.create_task(
+                                send_progress_update(
+                                    ProgressUpdate(
+                                        job_id=job_id,
+                                        status=JobStatus.TRANSCRIBING,
+                                        progress=progress,
+                                        message=f"Transcribing audio... ({segments_processed} segments processed)",
+                                    )
+                                )
                             )
-                        ),
-                        job_id,
-                        "stt",
-                    )
+                        except Exception as e:
+                            logger.error(f"Failed to update progress during transcription: {e}")
+
+                    # Schedule on main thread to avoid cross-thread DB access
+                    loop.call_soon_threadsafe(update_db_and_send_sse)
 
                 # Initialize STT service and transcribe
                 stt_service = get_stt_service()
@@ -259,6 +271,9 @@ async def process_audio(
             # Initialize translation service
             translation_service = TranslationService()
 
+            # Capture event loop for translation callbacks
+            loop = asyncio.get_running_loop()
+
             # Create progress callback for translation chunks
             def translation_progress_callback(
                 current_chunk: int, total_chunks: int, message: str
@@ -268,24 +283,33 @@ async def process_audio(
                 chunk_progress = (current_chunk / total_chunks) if total_chunks > 0 else 0
                 progress = 30.0 + (chunk_progress * 40.0)
 
-                # Update database (job is guaranteed to exist at this point)
-                assert job is not None, "Job should not be None in callback"
-                job.progress = progress
-                db.commit()
+                # Schedule DB update on main thread via call_soon_threadsafe
+                def update_db_and_send_sse() -> None:
+                    """Runs on main event loop thread."""
+                    try:
+                        # job is guaranteed to be non-None at this point
+                        assert job is not None, "Job should not be None in callback"
+                        # Refresh job to avoid stale data
+                        db.refresh(job)
+                        job.progress = progress
+                        db.commit()
 
-                # Send SSE update (non-blocking)
-                _schedule_progress_task(
-                    send_progress_update(
-                        ProgressUpdate(
-                            job_id=job_id,
-                            status=JobStatus.TRANSLATING,
-                            progress=progress,
-                            message=message,
+                        # Schedule SSE update as async task
+                        asyncio.create_task(
+                            send_progress_update(
+                                ProgressUpdate(
+                                    job_id=job_id,
+                                    status=JobStatus.TRANSLATING,
+                                    progress=progress,
+                                    message=message,
+                                )
+                            )
                         )
-                    ),
-                    job_id,
-                    "translation",
-                )
+                    except Exception as e:
+                        logger.error(f"Failed to update progress during translation: {e}")
+
+                # Schedule on main thread
+                loop.call_soon_threadsafe(update_db_and_send_sse)
 
             # Translate text
             translation = await translation_service.translate(
@@ -357,16 +381,14 @@ async def process_audio(
             # Initialize TTS service
             tts_service = TTSService()
 
+            # Capture event loop for TTS callbacks
+            loop = asyncio.get_running_loop()
+
             # Create progress callback for TTS
             def tts_progress_callback(tts_progress: float) -> None:
                 """Update progress during TTS generation."""
                 # Map TTS progress (0.0-1.0) to 70-95% range
                 progress = 70.0 + (tts_progress * 25.0)
-
-                # Update database (job is guaranteed to exist at this point)
-                assert job is not None, "Job should not be None in callback"
-                job.progress = progress
-                db.commit()
 
                 # Create informative message based on progress
                 tts_percent = int(tts_progress * 100)
@@ -377,19 +399,33 @@ async def process_audio(
                 else:
                     message = "Generating audio... finalizing"
 
-                # Send SSE update (non-blocking)
-                _schedule_progress_task(
-                    send_progress_update(
-                        ProgressUpdate(
-                            job_id=job_id,
-                            status=JobStatus.GENERATING_AUDIO,
-                            progress=progress,
-                            message=message,
+                # Schedule DB update on main thread via call_soon_threadsafe
+                def update_db_and_send_sse() -> None:
+                    """Runs on main event loop thread."""
+                    try:
+                        # job is guaranteed to be non-None at this point
+                        assert job is not None, "Job should not be None in callback"
+                        # Refresh job to avoid stale data
+                        db.refresh(job)
+                        job.progress = progress
+                        db.commit()
+
+                        # Schedule SSE update as async task
+                        asyncio.create_task(
+                            send_progress_update(
+                                ProgressUpdate(
+                                    job_id=job_id,
+                                    status=JobStatus.GENERATING_AUDIO,
+                                    progress=progress,
+                                    message=message,
+                                )
+                            )
                         )
-                    ),
-                    job_id,
-                    "tts",
-                )
+                    except Exception as e:
+                        logger.error(f"Failed to update progress during TTS: {e}")
+
+                # Schedule on main thread
+                loop.call_soon_threadsafe(update_db_and_send_sse)
 
             # Generate audio
             output_path = await tts_service.generate_audio(
