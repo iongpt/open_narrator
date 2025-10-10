@@ -102,7 +102,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 app = FastAPI(
     title=settings.app_name,
     description="Self-hosted audio translation service using Whisper, Claude, and Piper TTS",
-    version="0.1.0",
+    version="0.2.0",
     lifespan=lifespan,
 )
 
@@ -132,7 +132,7 @@ async def health_check() -> dict[str, str]:
     Returns:
         Status message
     """
-    return {"status": "healthy", "version": "0.1.0"}
+    return {"status": "healthy", "version": "0.2.0"}
 
 
 @app.get("/", response_class=HTMLResponse)
