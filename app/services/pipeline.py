@@ -4,9 +4,12 @@ This module orchestrates the complete STT → Translation → TTS workflow,
 with progress tracking, error handling, and database updates at each stage.
 """
 
+import asyncio
 import logging
+from collections.abc import Coroutine
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from sqlalchemy.orm import Session
 
@@ -15,12 +18,41 @@ from app.config import get_settings
 from app.database import SessionLocal
 from app.models import Job, JobStatus
 from app.schemas import ProgressUpdate
-from app.services.stt_service import STTService
+from app.services.stt_service import get_stt_service
 from app.services.translation_service import TranslationService
 from app.services.tts_service import TTSService
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
+
+
+def _schedule_progress_task(coro: Coroutine[Any, Any, None], job_id: int, stage: str) -> None:
+    """Run an SSE update without hiding exceptions from the scheduler."""
+
+    try:
+        task: asyncio.Task[None] = asyncio.create_task(coro)
+    except RuntimeError:
+        logger.warning(
+            "Cannot send progress update: no running event loop (job %s, stage %s)",
+            job_id,
+            stage,
+        )
+        return
+
+    def _log_result(completed: asyncio.Task[None]) -> None:
+        if completed.cancelled():
+            logger.warning("Progress update task cancelled (job %s, stage %s)", job_id, stage)
+            return
+        exc = completed.exception()
+        if exc is not None:
+            logger.error(
+                "Progress update task failed (job %s, stage %s): %s",
+                job_id,
+                stage,
+                exc,
+            )
+
+    task.add_done_callback(_log_result)
 
 
 async def process_audio(
@@ -103,7 +135,10 @@ async def process_audio(
                 from app.services.text_extraction_service import get_text_extraction_service
 
                 text_service = get_text_extraction_service()
-                transcript = text_service.extract_text(file_path=file_path)
+                transcript = await asyncio.to_thread(
+                    text_service.extract_text,
+                    file_path=file_path,
+                )
 
                 logger.info(
                     f"[Job {job_id}] Text extraction complete: {len(transcript)} characters"
@@ -129,7 +164,7 @@ async def process_audio(
                 )
 
                 # Initialize STT service and transcribe
-                stt_service = STTService()
+                stt_service = get_stt_service()
                 transcript = await stt_service.transcribe(
                     file_path=file_path,
                     language=source_lang,
@@ -211,22 +246,18 @@ async def process_audio(
                 db.commit()
 
                 # Send SSE update (non-blocking)
-                import asyncio
-
-                try:
-                    asyncio.create_task(
-                        send_progress_update(
-                            ProgressUpdate(
-                                job_id=job_id,
-                                status=JobStatus.TRANSLATING,
-                                progress=progress,
-                                message=message,
-                            )
+                _schedule_progress_task(
+                    send_progress_update(
+                        ProgressUpdate(
+                            job_id=job_id,
+                            status=JobStatus.TRANSLATING,
+                            progress=progress,
+                            message=message,
                         )
-                    )
-                except RuntimeError:
-                    # If no event loop is running, log warning
-                    logger.warning("Cannot send progress update: no event loop")
+                    ),
+                    job_id,
+                    "translation",
+                )
 
             # Translate text
             translation = await translation_service.translate(
@@ -310,21 +341,18 @@ async def process_audio(
                 db.commit()
 
                 # Send SSE update (non-blocking)
-                import asyncio
-
-                try:
-                    asyncio.create_task(
-                        send_progress_update(
-                            ProgressUpdate(
-                                job_id=job_id,
-                                status=JobStatus.GENERATING_AUDIO,
-                                progress=progress,
-                                message=f"Generating audio... {int(tts_progress * 100)}%",
-                            )
+                _schedule_progress_task(
+                    send_progress_update(
+                        ProgressUpdate(
+                            job_id=job_id,
+                            status=JobStatus.GENERATING_AUDIO,
+                            progress=progress,
+                            message=f"Generating audio... {int(tts_progress * 100)}%",
                         )
-                    )
-                except RuntimeError:
-                    logger.warning("Cannot send progress update: no event loop")
+                    ),
+                    job_id,
+                    "tts",
+                )
 
             # Generate audio
             output_path = await tts_service.generate_audio(

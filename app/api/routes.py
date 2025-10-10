@@ -48,7 +48,6 @@ ALLOWED_TEXT_TYPES = {
     "application/epub+zip",
     "application/x-mobipocket-ebook",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",  # DOCX
-    "application/msword",  # DOC
     "application/rtf",
     "text/rtf",
     "application/vnd.oasis.opendocument.text",  # ODT
@@ -61,7 +60,6 @@ ALLOWED_TEXT_EXTENSIONS = {
     ".epub",
     ".mobi",
     ".docx",
-    ".doc",
     ".rtf",
     ".odt",
     ".html",
@@ -104,7 +102,7 @@ def validate_file(file: UploadFile) -> str:
     # Invalid file type
     raise HTTPException(
         status_code=status.HTTP_400_BAD_REQUEST,
-        detail="Invalid file type. Allowed: MP3 audio or TXT/MD/PDF/EPUB/MOBI/DOCX/DOC/RTF/ODT/HTML text files",
+        detail="Invalid file type. Allowed: MP3 audio or TXT/MD/PDF/EPUB/MOBI/DOCX/RTF/ODT/HTML text files",
     )
 
 
@@ -172,18 +170,23 @@ async def upload_file(
     file_path = settings.upload_dir / unique_filename
 
     try:
-        # Read and write file
-        contents = await file.read()
-
-        # Check file size
-        if len(contents) > MAX_FILE_SIZE:
-            raise HTTPException(
-                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                detail=f"File too large. Maximum size: {settings.max_upload_size_mb}MB",
-            )
+        total_bytes = 0
+        chunk_size = 1024 * 1024  # 1MB chunks to bound memory usage
 
         with open(file_path, "wb") as f:
-            f.write(contents)
+            while True:
+                chunk = await file.read(chunk_size)
+                if not chunk:
+                    break
+
+                total_bytes += len(chunk)
+                if total_bytes > MAX_FILE_SIZE:
+                    raise HTTPException(
+                        status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                        detail=(f"File too large. Maximum size: {settings.max_upload_size_mb}MB"),
+                    )
+
+                f.write(chunk)
 
     except Exception as e:
         # Clean up partial file if exists

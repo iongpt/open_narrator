@@ -3,12 +3,16 @@
 import asyncio
 import logging
 from pathlib import Path
+from threading import Lock
 
 from faster_whisper import WhisperModel
 
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
+
+_stt_service_singleton: "STTService | None" = None
+_stt_service_lock = Lock()
 
 
 class STTService:
@@ -230,3 +234,15 @@ class STTService:
             "compute_type": self.settings.compute_type,
             "model_dir": str(self.settings.model_dir),
         }
+
+
+def get_stt_service() -> STTService:
+    """Return a cached STT service instance, initialising it lazily."""
+    global _stt_service_singleton
+    if _stt_service_singleton is not None:
+        return _stt_service_singleton
+
+    with _stt_service_lock:
+        if _stt_service_singleton is None:
+            _stt_service_singleton = STTService()
+    return _stt_service_singleton
