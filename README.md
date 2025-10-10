@@ -372,7 +372,7 @@ docker-compose logs -f
 - **Encoding issues**: Try saving your TXT file as UTF-8 encoding
 - Check Docker logs for specific error: `docker-compose logs app`
 
-**9. Health check failing**
+**10. Health check failing**
 ```bash
 # Test health endpoint manually
 curl http://localhost:8000/health
