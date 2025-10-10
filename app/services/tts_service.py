@@ -1,8 +1,10 @@
 """Text-to-Speech service with factory pattern for multiple TTS engines."""
 
+import asyncio
 import logging
 from collections.abc import Callable
 from pathlib import Path
+from uuid import uuid4
 
 from app.config import get_settings
 from app.schemas import VoiceInfo
@@ -71,6 +73,8 @@ class TTSService:
         voice_id: str,
         language: str,
         progress_callback: Callable[[float], None] | None = None,
+        *,
+        job_id: int | None = None,
     ) -> str:
         """
         Generate audio from text with progress tracking.
@@ -80,6 +84,7 @@ class TTSService:
             voice_id: Voice ID to use
             language: Language code
             progress_callback: Optional callback for progress updates (0.0 to 1.0)
+            job_id: Optional job identifier for collision-free filenames
 
         Returns:
             Path to generated audio file (MP3)
@@ -93,35 +98,60 @@ class TTSService:
 
         logger.info(f"Generating audio: {len(text)} chars, voice={voice_id}, lang={language}")
 
-        # Update progress: starting
+        loop = asyncio.get_running_loop()
+
+        def thread_progress(value: float) -> None:
+            if progress_callback is None:
+                return
+            loop.call_soon_threadsafe(progress_callback, value)
+
         if progress_callback:
             progress_callback(0.0)
 
-        # Check if text is too long (>10000 chars, split it)
-        if len(text) > 10000:
-            logger.info("Text is long, splitting into chunks")
-            return await self._generate_long_audio(text, voice_id, language, progress_callback)
+        return await asyncio.to_thread(
+            self._generate_audio_sync,
+            text,
+            voice_id,
+            language,
+            thread_progress if progress_callback else None,
+            job_id,
+        )
 
-        # Generate audio in one go
-        try:
-            output_path = self.engine.generate_audio(text, voice_id, language)
-
-            # Update progress: complete
-            if progress_callback:
-                progress_callback(1.0)
-
-            return output_path
-
-        except Exception as e:
-            logger.error(f"Audio generation failed: {e}")
-            raise RuntimeError(f"Failed to generate audio: {str(e)}") from e
-
-    async def _generate_long_audio(
+    def _generate_audio_sync(
         self,
         text: str,
         voice_id: str,
         language: str,
-        progress_callback: Callable[[float], None] | None = None,
+        progress_callback: Callable[[float], None] | None,
+        job_id: int | None,
+    ) -> str:
+        """Blocking audio generation executed inside a worker thread."""
+        if len(text) > 10000:
+            logger.info("Text is long, splitting into chunks")
+            return self._generate_long_audio_sync(
+                text,
+                voice_id,
+                language,
+                progress_callback,
+                job_id,
+            )
+
+        try:
+            output_path = self.engine.generate_audio(text, voice_id, language)
+            if progress_callback:
+                progress_callback(1.0)
+            return output_path
+        except Exception as exc:  # pragma: no cover - defensive logging
+            logger.error(f"Audio generation failed: {exc}")
+            raise RuntimeError(f"Failed to generate audio: {exc}") from exc
+
+    def _generate_long_audio_sync(
+        self,
+        text: str,
+        voice_id: str,
+        language: str,
+        progress_callback: Callable[[float], None] | None,
+        job_id: int | None,
     ) -> str:
         """
         Generate audio for long text by splitting into chunks.
@@ -131,6 +161,7 @@ class TTSService:
             voice_id: Voice ID to use
             language: Language code
             progress_callback: Optional progress callback
+            job_id: Optional job identifier for unique filenames
 
         Returns:
             Path to concatenated audio file
@@ -138,47 +169,46 @@ class TTSService:
         Raises:
             RuntimeError: If audio generation or concatenation fails
         """
-        # Split text into chunks by sentences/paragraphs
         chunks = self._split_text(text, max_length=5000)
         logger.info(f"Split text into {len(chunks)} chunks")
 
-        # Import here to avoid circular dependency
         from pydub import AudioSegment
 
-        # Generate audio for each chunk
-        audio_paths = []
+        audio_paths: list[str] = []
         combined_audio = AudioSegment.empty()
 
         for i, chunk in enumerate(chunks):
-            logger.info(f"Generating chunk {i+1}/{len(chunks)}")
-
-            # Generate audio for chunk
+            logger.info(f"Generating chunk {i + 1}/{len(chunks)}")
             chunk_path = self.engine.generate_audio(chunk, voice_id, language)
             audio_paths.append(chunk_path)
 
-            # Load and append to combined audio
             chunk_audio = AudioSegment.from_mp3(chunk_path)
             combined_audio += chunk_audio
 
-            # Update progress
             if progress_callback:
                 progress = (i + 1) / len(chunks)
                 progress_callback(progress)
 
-        # Export combined audio
-        output_path = settings.output_dir / f"combined_{voice_id}.mp3"
+        unique_suffix = uuid4().hex[:8]
+        job_prefix = f"job{job_id}_" if job_id is not None else ""
+        output_path = settings.output_dir / f"{job_prefix}{voice_id}_{unique_suffix}.mp3"
         combined_audio.export(
-            str(output_path), format="mp3", bitrate="128k", parameters=["-ar", "22050"]
+            str(output_path),
+            format="mp3",
+            bitrate="128k",
+            parameters=["-ar", "22050"],
         )
 
         logger.info(f"Generated combined audio: {output_path}")
 
-        # Clean up individual chunk files
         for path in audio_paths:
             try:
                 Path(path).unlink()
-            except Exception as e:
-                logger.warning(f"Failed to delete chunk file {path}: {e}")
+            except Exception as exc:  # pragma: no cover - cleanup best-effort
+                logger.warning(f"Failed to delete chunk file {path}: {exc}")
+
+        if progress_callback:
+            progress_callback(1.0)
 
         return str(output_path)
 

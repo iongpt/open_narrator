@@ -3,6 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    platform: linux/arm64  # Use ARM64 for M1/M2 Macs (change to linux/amd64 for Intel)
     container_name: open_narrator
     ports:
       - "8000:8000"
@@ -21,7 +22,8 @@ services:
       - MODEL_DIR=./data/models
       # Load from .env file
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - WHISPER_MODEL=${WHISPER_MODEL:-large-v3}
+      # Use 'base' for fast testing, 'medium' for balance, 'large-v3' for best quality
+      - WHISPER_MODEL=${WHISPER_MODEL:-base}
       - WHISPER_COMPUTE_TYPE=${WHISPER_COMPUTE_TYPE:-auto}
       - TTS_ENGINE=${TTS_ENGINE:-piper}
       - DEBUG=${DEBUG:-false}

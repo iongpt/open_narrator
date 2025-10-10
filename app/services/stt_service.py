@@ -1,5 +1,6 @@
 """Speech-to-Text service using Faster-Whisper."""
 
+import asyncio
 import logging
 from pathlib import Path
 
@@ -78,24 +79,42 @@ class STTService:
             ValueError: If file is corrupted or invalid format
             RuntimeError: If transcription fails
         """
-        file_path = Path(file_path)
+        path_obj = Path(file_path)
 
         # Validate file exists
-        if not file_path.exists():
-            raise FileNotFoundError(f"Audio file not found: {file_path}")
+        if not path_obj.exists():
+            raise FileNotFoundError(f"Audio file not found: {path_obj}")
 
         # Validate file is not empty
-        if file_path.stat().st_size == 0:
-            raise ValueError(f"Audio file is empty: {file_path}")
+        if path_obj.stat().st_size == 0:
+            raise ValueError(f"Audio file is empty: {path_obj}")
 
         if self.model is None:
             raise RuntimeError("Whisper model not initialized")
 
+        return await asyncio.to_thread(
+            self._transcribe_sync,
+            path_obj,
+            language,
+            beam_size,
+            vad_filter,
+        )
+
+    def _transcribe_sync(
+        self,
+        file_path: Path,
+        language: str,
+        beam_size: int,
+        vad_filter: bool,
+    ) -> str:
+        """Synchronously transcribe audio; meant to run in a worker thread."""
         try:
+            model = self.model
+            assert model is not None, "Whisper model must be initialized before transcription"
             logger.info(f"Starting transcription of {file_path}")
 
             # Transcribe with Faster-Whisper
-            segments, info = self.model.transcribe(
+            segments, info = model.transcribe(
                 str(file_path),
                 language=language,
                 beam_size=beam_size,
@@ -103,11 +122,7 @@ class STTService:
                 word_timestamps=False,
             )
 
-            # Collect all segments into a single transcript
-            transcript_parts = []
-            for segment in segments:
-                transcript_parts.append(segment.text)
-
+            transcript_parts = [segment.text for segment in segments]
             transcript = " ".join(transcript_parts).strip()
 
             logger.info(
@@ -117,9 +132,9 @@ class STTService:
 
             return transcript
 
-        except Exception as e:
-            logger.error(f"Transcription failed for {file_path}: {e}")
-            raise RuntimeError(f"Transcription failed: {e}") from e
+        except Exception as exc:  # pragma: no cover - defensive logging
+            logger.error(f"Transcription failed for {file_path}: {exc}")
+            raise RuntimeError(f"Transcription failed: {exc}") from exc
 
     def validate_audio(self, file_path: str | Path) -> dict[str, str | int | float]:
         """

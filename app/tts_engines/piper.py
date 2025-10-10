@@ -2,6 +2,7 @@
 
 import logging
 import tempfile
+import wave
 from pathlib import Path
 
 import httpx
@@ -396,8 +397,8 @@ class PiperEngine(BaseTTSEngine):
                 wav_path = Path(wav_file.name)
 
             # Generate audio
-            with open(wav_path, "wb") as f:
-                voice.synthesize(text, f)
+            with wave.open(str(wav_path), "wb") as wav_file:
+                voice.synthesize(text, wav_file)
 
             logger.info(f"Generated WAV audio: {wav_path}")
 

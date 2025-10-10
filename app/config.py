@@ -16,6 +16,9 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
+        protected_namespaces=(
+            "settings_",
+        ),  # Change from default 'model_' to avoid conflict with model_dir
     )
 
     # Application

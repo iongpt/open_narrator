@@ -278,6 +278,7 @@ async def process_audio(
                 voice_id=voice_id,
                 language=target_lang,
                 progress_callback=tts_progress_callback,
+                job_id=job.id,
             )
 
             logger.info(f"[Job {job_id}] Audio generation complete: {output_path}")
@@ -340,12 +341,17 @@ async def process_audio(
             # Optional: Clean up temporary files
             try:
                 original_file = Path(file_path)
-                if original_file.exists() and original_file.suffix == ".wav":
-                    # Only delete temporary WAV files (converted from MP3)
-                    logger.info(f"Cleaning up temporary file: {original_file}")
-                    original_file.unlink()
+                if original_file.exists():
+                    if original_file.suffix == ".wav" and original_file.name.startswith("tmp"):
+                        logger.info(f"Cleaning up temporary file: {original_file}")
+                        original_file.unlink()
+                    else:
+                        resolved_upload_dir = settings.upload_dir.resolve()
+                        if resolved_upload_dir in original_file.resolve().parents:
+                            logger.info(f"Removing original upload file: {original_file}")
+                            original_file.unlink()
             except Exception as e:
-                logger.warning(f"Failed to clean up temporary file: {str(e)}")
+                logger.warning(f"Failed to clean up uploaded file: {str(e)}")
 
         except Exception as e:
             logger.error(f"[Job {job_id}] Finalization failed: {str(e)}")

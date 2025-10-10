@@ -3,6 +3,7 @@
 import os
 from datetime import datetime
 from pathlib import Path
+from uuid import uuid4
 
 from fastapi import (
     APIRouter,
@@ -123,9 +124,8 @@ async def upload_audio(
     # Sanitize filename
     safe_filename = sanitize_filename(file.filename or "upload.mp3")
 
-    # Create unique filename with timestamp
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    unique_filename = f"{timestamp}_{safe_filename}"
+    # Create unique filename to avoid collisions
+    unique_filename = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid4().hex}_{safe_filename}"
 
     # Save file
     file_path = settings.upload_dir / unique_filename
