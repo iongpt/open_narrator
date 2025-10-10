@@ -57,7 +57,6 @@ class Settings(BaseSettings):
     translation_model: str = "claude-sonnet-4.5-20250514"
     translation_max_tokens: int = 20000  # Max tokens per chunk (input)
     translation_max_output_tokens: int = 64000  # Max output tokens from LLM
-    translation_chunk_overlap: int = 200
 
     # TTS Settings
     tts_engine: Literal["piper"] = "piper"

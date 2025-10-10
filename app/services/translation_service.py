@@ -100,12 +100,11 @@ class TranslationService:
             f"{len(text)} chars, context: {context or 'none'}"
         )
 
-        # Chunk the text
+        # Chunk the text (no overlap - each paragraph appears exactly once)
         chunks = self.chunking_service.chunk_text(
             text,
             max_tokens=self.settings.translation_max_tokens,
             preserve_paragraphs=True,
-            overlap_tokens=self.settings.translation_chunk_overlap,
         )
 
         total_chunks = len(chunks)
@@ -136,8 +135,8 @@ class TranslationService:
                     context=context,
                 )
 
-                # Remove overlap markers from translation if present
-                translated_chunk = self._clean_translation(translated_chunk)
+                # Clean up any extra whitespace
+                translated_chunk = translated_chunk.strip()
 
                 translated_chunks.append(translated_chunk)
 
@@ -163,39 +162,15 @@ class TranslationService:
 
         return result
 
-    def _clean_translation(self, text: str) -> str:
-        """
-        Clean up translation by removing overlap markers and artifacts.
-
-        Args:
-            text: The translated text to clean
-
-        Returns:
-            Cleaned translation
-        """
-        # Remove overlap markers that might have been translated
-        markers_to_remove = [
-            "[...continued from previous chunk]",
-            "[...suite du fragment précédent]",  # French
-            "[...continuare din fragmentul anterior]",  # Romanian
-            "[...fortsetzung vom vorherigen teil]",  # German
-        ]
-
-        cleaned = text
-        for marker in markers_to_remove:
-            cleaned = cleaned.replace(marker, "").replace(marker.lower(), "")
-
-        # Remove any leading/trailing whitespace
-        cleaned = cleaned.strip()
-
-        return cleaned
-
     def _reassemble_chunks(self, chunks: list[str]) -> str:
         """
         Reassemble translated chunks into a single text.
 
+        Since chunks have no overlap, this is a straightforward join operation.
+        Each chunk contains unique content that appears exactly once in the output.
+
         Args:
-            chunks: List of translated chunks
+            chunks: List of translated chunks (non-overlapping)
 
         Returns:
             Reassembled text with proper paragraph spacing
@@ -203,8 +178,7 @@ class TranslationService:
         if not chunks:
             return ""
 
-        # Join chunks with double newlines to preserve paragraph structure
-        # Remove any extra whitespace that might have been introduced
+        # Simple join with double newlines (chunks are already clean)
         reassembled = "\n\n".join(chunk.strip() for chunk in chunks if chunk.strip())
 
         return reassembled
