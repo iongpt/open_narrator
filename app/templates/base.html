@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}OpenNarrator - Audio Translation Service{% endblock %}</title>
+
+    <!-- TailwindCSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- HTMX -->
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+
+    <!-- Custom styles -->
+    <style>
+        /* Progress bar animation */
+        @keyframes progress {
+            0% { background-position: 0 0; }
+            100% { background-position: 50px 50px; }
+        }
+
+        .progress-bar-animated {
+            background-image: linear-gradient(
+                45deg,
+                rgba(255, 255, 255, 0.15) 25%,
+                transparent 25%,
+                transparent 50%,
+                rgba(255, 255, 255, 0.15) 50%,
+                rgba(255, 255, 255, 0.15) 75%,
+                transparent 75%,
+                transparent
+            );
+            background-size: 50px 50px;
+            animation: progress 2s linear infinite;
+        }
+
+        /* Drag and drop styles */
+        .drag-over {
+            border-color: #3b82f6;
+            background-color: #eff6ff;
+        }
+
+        /* Status badge colors */
+        .status-pending { background-color: #9ca3af; }
+        .status-transcribing { background-color: #60a5fa; }
+        .status-transcribed { background-color: #34d399; }
+        .status-translating { background-color: #fbbf24; }
+        .status-translated { background-color: #a78bfa; }
+        .status-generating_audio { background-color: #fb923c; }
+        .status-completed { background-color: #10b981; }
+        .status-failed { background-color: #ef4444; }
+    </style>
+
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- Navigation -->
+    <nav class="bg-white shadow-sm border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center">
+                    <h1 class="text-2xl font-bold text-gray-900">OpenNarrator</h1>
+                    <span class="ml-3 px-2 py-1 text-xs font-medium text-gray-600 bg-gray-100 rounded">v0.1.0</span>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <a href="/docs" target="_blank" class="text-sm text-gray-600 hover:text-gray-900">API Docs</a>
+                    <a href="/health" target="_blank" class="text-sm text-gray-600 hover:text-gray-900">Health</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-gray-200 mt-12">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <p class="text-center text-sm text-gray-500">
+                OpenNarrator - Self-hosted audio translation service |
+                <a href="https://github.com/yourusername/opennarrator" target="_blank" class="text-blue-600 hover:text-blue-800">GitHub</a>
+            </p>
+        </div>
+    </footer>
+
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>

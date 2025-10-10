@@ -1,0 +1,48 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: open_narrator
+    ports:
+      - "8000:8000"
+    volumes:
+      # Persist data
+      - ./data:/app/data
+      # Mount app code for development (comment out for production)
+      - ./app:/app/app
+      # Mount templates and static files
+      - ./app/templates:/app/app/templates
+      - ./app/static:/app/app/static
+    environment:
+      - DATABASE_URL=sqlite:///./data/app.db
+      - UPLOAD_DIR=./data/uploads
+      - OUTPUT_DIR=./data/outputs
+      - MODEL_DIR=./data/models
+      # Load from .env file
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - WHISPER_MODEL=${WHISPER_MODEL:-large-v3}
+      - WHISPER_COMPUTE_TYPE=${WHISPER_COMPUTE_TYPE:-auto}
+      - TTS_ENGINE=${TTS_ENGINE:-piper}
+      - DEBUG=${DEBUG:-false}
+    env_file:
+      - .env
+    restart: unless-stopped
+    # GPU support (uncomment if GPU is available)
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  data:
+    driver: local
