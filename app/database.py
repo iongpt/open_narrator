@@ -10,10 +10,11 @@ from app.config import get_settings
 settings = get_settings()
 
 # Create SQLAlchemy engine
+# Note: echo is disabled when silence_sqlalchemy is True, even in debug mode
 engine = create_engine(
     settings.database_url,
     connect_args={"check_same_thread": False} if "sqlite" in settings.database_url else {},
-    echo=settings.debug,
+    echo=settings.debug and not settings.silence_sqlalchemy,
 )
 
 # Create session factory

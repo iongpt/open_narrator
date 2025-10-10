@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     app_name: str = "OpenNarrator"
     debug: bool = False
     log_level: str = "INFO"
+    silence_sqlalchemy: bool = True  # Silence SQLAlchemy logs except errors
 
     # Server
     host: str = "0.0.0.0"

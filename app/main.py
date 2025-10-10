@@ -16,10 +16,10 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app.api import routes, websocket
-
-# Import config first, BEFORE other app modules
 from app.config import get_settings
 from app.database import init_db
+
+templates = Jinja2Templates(directory="app/templates")
 
 settings = get_settings()
 
@@ -60,19 +60,22 @@ def configure_logging() -> None:
     logging.getLogger("urllib3").setLevel(logging.WARNING)
     logging.getLogger("asyncio").setLevel(logging.WARNING)
 
+    # Optionally silence SQLAlchemy (except errors)
+    if settings.silence_sqlalchemy:
+        logging.getLogger("sqlalchemy.engine").setLevel(logging.ERROR)
+        logging.getLogger("sqlalchemy.pool").setLevel(logging.ERROR)
+        logging.getLogger("sqlalchemy.dialects").setLevel(logging.ERROR)
+        logging.getLogger("sqlalchemy.orm").setLevel(logging.ERROR)
+
     # Log startup message
     logger = logging.getLogger(__name__)
-    logger.info(f"Logging configured: level={settings.log_level.upper()}, debug={settings.debug}")
+    logger.info(
+        f"Logging configured: level={settings.log_level.upper()}, debug={settings.debug}, sqlalchemy_silenced={settings.silence_sqlalchemy}"
+    )
 
 
-# Configure logging FIRST, before importing other app modules
 configure_logging()
 logger = logging.getLogger(__name__)
-
-# NOW import app modules (after logging is configured)
-
-
-templates = Jinja2Templates(directory="app/templates")
 
 
 @asynccontextmanager
