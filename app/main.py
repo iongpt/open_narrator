@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app.api import routes, websocket
-from app.config import get_settings
+from app.config import VERSION, get_settings
 from app.database import init_db
 
 templates = Jinja2Templates(directory="app/templates")
@@ -102,7 +102,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 app = FastAPI(
     title=settings.app_name,
     description="Self-hosted audio translation service using Whisper, Claude, and Piper TTS",
-    version="0.2.0",
+    version=VERSION,
     lifespan=lifespan,
 )
 
@@ -132,7 +132,7 @@ async def health_check() -> dict[str, str]:
     Returns:
         Status message
     """
-    return {"status": "healthy", "version": "0.2.0"}
+    return {"status": "healthy", "version": VERSION}
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -146,4 +146,4 @@ async def root(request: Request) -> HTMLResponse:
     Returns:
         HTML page with the UI
     """
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse("index.html", {"request": request, "version": VERSION})

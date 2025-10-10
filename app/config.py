@@ -7,6 +7,9 @@ from typing import Literal
 import torch
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Application version - single source of truth
+VERSION = "0.2.0"
+
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
