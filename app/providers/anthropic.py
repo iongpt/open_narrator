@@ -105,7 +105,7 @@ class AnthropicProvider(BaseLLMProvider):
                     logger.info("=" * 80)
                     logger.info("LLM REQUEST:")
                     logger.info(f"Model: {self.model}")
-                    logger.info("Max Tokens: 4096")
+                    logger.info(f"Max Tokens: {self.settings.translation_max_output_tokens}")
                     logger.info(
                         f"Prompt:\n{prompt[:500]}..." if len(prompt) > 500 else f"Prompt:\n{prompt}"
                     )
@@ -115,7 +115,7 @@ class AnthropicProvider(BaseLLMProvider):
                 response = await asyncio.to_thread(
                     self.client.messages.create,
                     model=self.model,
-                    max_tokens=4096,
+                    max_tokens=self.settings.translation_max_output_tokens,
                     messages=[{"role": "user", "content": prompt}],
                 )
 
@@ -131,6 +131,13 @@ class AnthropicProvider(BaseLLMProvider):
                 logger.info(
                     f"Translation successful. Tokens - Input: {input_tokens}, Output: {output_tokens}"
                 )
+
+                # Warn if translation was truncated due to max_tokens limit
+                if response.stop_reason == "max_tokens":
+                    logger.error(
+                        f"Translation was truncated! Hit max_tokens limit ({output_tokens} tokens). "
+                        "The translation is incomplete. Consider increasing max_tokens or splitting the text into smaller chunks."
+                    )
 
                 # Log response details in debug mode
                 if self.settings.debug:
@@ -246,7 +253,7 @@ class AnthropicProvider(BaseLLMProvider):
         return {
             "name": self.model,
             "provider": "anthropic",
-            "max_tokens": 200000,  # Claude 3.5 Sonnet context window
+            "max_tokens": 64000,  # Claude 4.5 Sonnet context window
             "supports_streaming": False,  # Not implemented yet
         }
 

@@ -104,6 +104,13 @@ async def process_audio(
             db.commit()
             db.refresh(job)
 
+            # Save transcript to debug file if debug mode is enabled
+            if settings.debug:
+                debug_transcript_path = settings.debug_dir / f"job{job_id}_transcript.txt"
+                with open(debug_transcript_path, "w", encoding="utf-8") as f:
+                    f.write(transcript)
+                logger.info(f"Saved transcript to debug file: {debug_transcript_path}")
+
             # Send progress update
             await send_progress_update(
                 ProgressUpdate(
@@ -198,6 +205,13 @@ async def process_audio(
             job.progress = 70.0
             db.commit()
             db.refresh(job)
+
+            # Save translation to debug file if debug mode is enabled
+            if settings.debug:
+                debug_translation_path = settings.debug_dir / f"job{job_id}_translation.txt"
+                with open(debug_translation_path, "w", encoding="utf-8") as f:
+                    f.write(translation)
+                logger.info(f"Saved translation to debug file: {debug_translation_path}")
 
             # Send progress update
             await send_progress_update(
