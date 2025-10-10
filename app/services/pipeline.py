@@ -163,11 +163,39 @@ async def process_audio(
                     )
                 )
 
+                # Create progress callback for STT
+                def stt_progress_callback(segments_processed: int) -> None:
+                    """Update progress during transcription."""
+                    # Map segment progress to 0-30% range
+                    # We don't know total segments upfront, so show incremental progress
+                    # Cap at 28% to leave room for finalization
+                    progress = min(28.0, segments_processed * 0.5)  # ~0.5% per segment
+
+                    # Update database (job is guaranteed to exist at this point)
+                    assert job is not None, "Job should not be None in callback"
+                    job.progress = progress
+                    db.commit()
+
+                    # Send SSE update (non-blocking)
+                    _schedule_progress_task(
+                        send_progress_update(
+                            ProgressUpdate(
+                                job_id=job_id,
+                                status=JobStatus.TRANSCRIBING,
+                                progress=progress,
+                                message=f"Transcribing audio... ({segments_processed} segments processed)",
+                            )
+                        ),
+                        job_id,
+                        "stt",
+                    )
+
                 # Initialize STT service and transcribe
                 stt_service = get_stt_service()
                 transcript = await stt_service.transcribe(
                     file_path=file_path,
                     language=source_lang,
+                    progress_callback=stt_progress_callback,
                 )
 
                 logger.info(f"[Job {job_id}] Transcription complete: {len(transcript)} characters")
@@ -340,6 +368,15 @@ async def process_audio(
                 job.progress = progress
                 db.commit()
 
+                # Create informative message based on progress
+                tts_percent = int(tts_progress * 100)
+                if tts_percent < 10:
+                    message = "Generating audio... starting"
+                elif tts_percent < 100:
+                    message = f"Generating audio... {tts_percent}%"
+                else:
+                    message = "Generating audio... finalizing"
+
                 # Send SSE update (non-blocking)
                 _schedule_progress_task(
                     send_progress_update(
@@ -347,7 +384,7 @@ async def process_audio(
                             job_id=job_id,
                             status=JobStatus.GENERATING_AUDIO,
                             progress=progress,
-                            message=f"Generating audio... {int(tts_progress * 100)}%",
+                            message=message,
                         )
                     ),
                     job_id,

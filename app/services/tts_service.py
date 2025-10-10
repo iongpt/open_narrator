@@ -138,33 +138,40 @@ class TTSService:
             logger.debug(f"Text Preview:\n{text[:500]}..." if len(text) > 500 else f"Text:\n{text}")
             logger.debug("=" * 80)
 
-        if len(text) > 10000:
-            logger.info("Text is long, splitting into chunks")
-            return self._generate_long_audio_sync(
-                text,
-                voice_id,
-                language,
-                progress_callback,
-                job_id,
-            )
+        # For better progress tracking, split text into sentences
+        # This provides granular progress updates even for short/medium texts
+        sentences = self._split_into_sentences(text)
 
-        try:
-            output_path = self.engine.generate_audio(text, voice_id, language)
+        # If only 1-2 sentences, just generate directly
+        if len(sentences) <= 2:
+            logger.info(f"Generating audio for short text ({len(sentences)} sentence(s))")
+            try:
+                output_path = self.engine.generate_audio(text, voice_id, language)
 
-            # Debug logging for TTS result
-            if settings.debug:
-                logger.debug("=" * 80)
-                logger.debug("TTS RESULT:")
-                logger.debug(f"Output Path: {output_path}")
-                logger.debug(f"File Size: {Path(output_path).stat().st_size / 1024:.2f} KB")
-                logger.debug("=" * 80)
+                # Debug logging for TTS result
+                if settings.debug:
+                    logger.debug("=" * 80)
+                    logger.debug("TTS RESULT:")
+                    logger.debug(f"Output Path: {output_path}")
+                    logger.debug(f"File Size: {Path(output_path).stat().st_size / 1024:.2f} KB")
+                    logger.debug("=" * 80)
 
-            if progress_callback:
-                progress_callback(1.0)
-            return output_path
-        except Exception as exc:  # pragma: no cover - defensive logging
-            logger.error(f"Audio generation failed: {exc}")
-            raise RuntimeError(f"Failed to generate audio: {exc}") from exc
+                if progress_callback:
+                    progress_callback(1.0)
+                return output_path
+            except Exception as exc:  # pragma: no cover - defensive logging
+                logger.error(f"Audio generation failed: {exc}")
+                raise RuntimeError(f"Failed to generate audio: {exc}") from exc
+
+        # For multiple sentences, generate with progress tracking
+        logger.info(f"Generating audio with progress tracking ({len(sentences)} sentences)")
+        return self._generate_with_sentence_progress(
+            sentences,
+            voice_id,
+            language,
+            progress_callback,
+            job_id,
+        )
 
     def _generate_long_audio_sync(
         self,
@@ -227,6 +234,103 @@ class TTSService:
                 Path(path).unlink()
             except Exception as exc:  # pragma: no cover - cleanup best-effort
                 logger.warning(f"Failed to delete chunk file {path}: {exc}")
+
+        if progress_callback:
+            progress_callback(1.0)
+
+        return str(output_path)
+
+    def _split_into_sentences(self, text: str) -> list[str]:
+        """
+        Split text into individual sentences for progress tracking.
+
+        Args:
+            text: Text to split into sentences
+
+        Returns:
+            List of sentences
+        """
+        import re
+
+        # Split on sentence boundaries (., !, ?, and newlines)
+        # Keep the punctuation with the sentence
+        sentences = re.split(r"(?<=[.!?])\s+|\n+", text)
+
+        # Filter out empty sentences and strip whitespace
+        sentences = [s.strip() for s in sentences if s.strip()]
+
+        return sentences
+
+    def _generate_with_sentence_progress(
+        self,
+        sentences: list[str],
+        voice_id: str,
+        language: str,
+        progress_callback: Callable[[float], None] | None,
+        job_id: int | None,
+    ) -> str:
+        """
+        Generate audio for multiple sentences with progress tracking.
+
+        Args:
+            sentences: List of sentences to generate audio for
+            voice_id: Voice ID to use
+            language: Language code
+            progress_callback: Optional progress callback
+            job_id: Optional job identifier for unique filenames
+
+        Returns:
+            Path to combined audio file
+
+        Raises:
+            RuntimeError: If audio generation or concatenation fails
+        """
+        from pydub import AudioSegment
+
+        total_sentences = len(sentences)
+        logger.info(f"Generating audio for {total_sentences} sentences")
+
+        audio_paths: list[str] = []
+        combined_audio = AudioSegment.empty()
+
+        for i, sentence in enumerate(sentences):
+            logger.info(f"Generating sentence {i + 1}/{total_sentences}")
+
+            # Generate audio for this sentence
+            sentence_path = self.engine.generate_audio(sentence, voice_id, language)
+            audio_paths.append(sentence_path)
+
+            # Add to combined audio
+            sentence_audio = AudioSegment.from_mp3(sentence_path)
+            combined_audio += sentence_audio
+
+            # Report progress
+            if progress_callback:
+                progress = (i + 1) / total_sentences
+                progress_callback(progress)
+
+        # Save combined audio
+        from uuid import uuid4
+
+        unique_suffix = uuid4().hex[:8]
+        job_prefix = f"job{job_id}_" if job_id is not None else ""
+        output_path = settings.output_dir / f"{job_prefix}{voice_id}_{unique_suffix}.mp3"
+
+        combined_audio.export(
+            str(output_path),
+            format="mp3",
+            bitrate="128k",
+            parameters=["-ar", "22050"],
+        )
+
+        logger.info(f"Generated combined audio: {output_path}")
+
+        # Clean up individual sentence files
+        for path in audio_paths:
+            try:
+                Path(path).unlink()
+            except Exception as exc:  # pragma: no cover - cleanup best-effort
+                logger.warning(f"Failed to delete sentence file {path}: {exc}")
 
         if progress_callback:
             progress_callback(1.0)

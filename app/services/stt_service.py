@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+from collections.abc import Callable
 from pathlib import Path
 from threading import Lock
 
@@ -65,6 +66,7 @@ class STTService:
         language: str = "en",
         beam_size: int = 5,
         vad_filter: bool | None = None,
+        progress_callback: "Callable[[int], None] | None" = None,
     ) -> str:
         """
         Transcribe audio file to text.
@@ -74,6 +76,7 @@ class STTService:
             language: Language code (e.g., 'en', 'ro', 'es')
             beam_size: Beam size for decoding (higher = more accurate, slower)
             vad_filter: Whether to use Voice Activity Detection to filter silence (defaults to settings)
+            progress_callback: Optional callback function(segments_processed) called after each segment
 
         Returns:
             Transcribed text as a single string
@@ -106,6 +109,7 @@ class STTService:
             language,
             beam_size,
             vad_filter,
+            progress_callback,
         )
 
     def _transcribe_sync(
@@ -114,6 +118,7 @@ class STTService:
         language: str,
         beam_size: int,
         vad_filter: bool,
+        progress_callback: Callable[[int], None] | None,
     ) -> str:
         """Synchronously transcribe audio; meant to run in a worker thread."""
         try:
@@ -143,7 +148,19 @@ class STTService:
                 word_timestamps=False,
             )
 
-            transcript_parts = [segment.text for segment in segments]
+            # Process segments with progress tracking
+            transcript_parts = []
+
+            for segment_count, segment in enumerate(segments, start=1):
+                transcript_parts.append(segment.text)
+
+                # Report progress after each segment
+                if progress_callback:
+                    try:
+                        progress_callback(segment_count)
+                    except Exception as e:
+                        logger.warning(f"Progress callback failed: {e}")
+
             transcript = " ".join(transcript_parts).strip()
 
             logger.info(
