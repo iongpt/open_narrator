@@ -1,45 +1,50 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
     <!-- Left Column: Upload and Configuration -->
     <div class="lg:col-span-1 space-y-6">
         <!-- Upload Section -->
-        <div class="bg-white rounded-lg shadow-md p-6">
-            <h2 class="text-xl font-semibold text-gray-900 mb-4">Upload Audio</h2>
+        <div class="bg-slate-900 rounded-xl shadow-xl p-6 border border-slate-800">
+            <h2 class="text-lg font-semibold text-white mb-4 flex items-center">
+                <svg class="w-5 h-5 mr-2 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                </svg>
+                Upload Content
+            </h2>
 
             <form id="upload-form" hx-post="/api/upload" hx-encoding="multipart/form-data" hx-target="#jobs-container" hx-swap="afterbegin">
                 <!-- File Upload -->
                 <div class="mb-4">
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Audio File</label>
-                    <div class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 transition-colors" id="drop-zone">
-                        <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                    <label class="block text-sm font-medium text-slate-300 mb-2">Audio or Text File</label>
+                    <div class="border-2 border-dashed border-slate-700 rounded-lg p-6 text-center hover:border-blue-500 transition-colors cursor-pointer bg-slate-950" id="drop-zone">
+                        <svg class="mx-auto h-10 w-10 text-slate-500" stroke="currentColor" fill="none" viewBox="0 0 48 48">
                             <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
                         </svg>
-                        <p class="mt-2 text-sm text-gray-600">
-                            <label for="file-input" class="cursor-pointer text-blue-600 hover:text-blue-800">
+                        <p class="mt-2 text-sm text-slate-400">
+                            <label for="file-input" class="cursor-pointer text-blue-400 hover:text-blue-300 font-medium">
                                 Click to upload
                             </label>
                             or drag and drop
                         </p>
-                        <p class="mt-1 text-xs text-gray-500">MP3 files up to 50MB</p>
-                        <input type="file" id="file-input" name="file" accept=".mp3,audio/mpeg" class="hidden" required>
+                        <p class="mt-1 text-xs text-slate-500">Audio: MP3 • Text: TXT, MD, PDF, EPUB, MOBI, DOCX, DOC, RTF, ODT, HTML</p>
+                        <input type="file" id="file-input" name="file" accept=".mp3,.txt,.md,.pdf,.epub,.mobi,.docx,.doc,.rtf,.odt,.html,.htm,audio/mpeg,text/plain,text/markdown,application/pdf,application/epub+zip,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword,application/rtf,application/vnd.oasis.opendocument.text,text/html" class="hidden" required>
                     </div>
-                    <p id="file-name" class="mt-2 text-sm text-gray-600"></p>
+                    <p id="file-name" class="mt-2 text-sm text-slate-400"></p>
                 </div>
 
                 <!-- Source Language -->
                 <div class="mb-4">
-                    <label for="source-language" class="block text-sm font-medium text-gray-700 mb-2">Source Language</label>
-                    <select id="source-language" name="source_language" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                    <label for="source-language" class="block text-sm font-medium text-slate-300 mb-2">Source Language</label>
+                    <select id="source-language" name="source_language" class="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-white">
                         <option value="en" selected>English</option>
                     </select>
                 </div>
 
                 <!-- Target Language -->
                 <div class="mb-4">
-                    <label for="target-language" class="block text-sm font-medium text-gray-700 mb-2">Target Language</label>
-                    <select id="target-language" name="target_language" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" required>
+                    <label for="target-language" class="block text-sm font-medium text-slate-300 mb-2">Target Language</label>
+                    <select id="target-language" name="target_language" class="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-white" required>
                         <option value="">Select language...</option>
                         <option value="ro">Romanian</option>
                         <option value="es">Spanish</option>
@@ -57,79 +62,70 @@
                         <option value="ar">Arabic</option>
                         <option value="hi">Hindi</option>
                         <option value="tr">Turkish</option>
-                        <option value="sv">Swedish</option>
-                        <option value="da">Danish</option>
-                        <option value="no">Norwegian</option>
-                        <option value="fi">Finnish</option>
                     </select>
                 </div>
 
                 <!-- Voice Selection -->
                 <div class="mb-4">
-                    <label for="voice-id" class="block text-sm font-medium text-gray-700 mb-2">Voice</label>
-                    <select id="voice-id" name="voice_id" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" required>
-                        <option value="">Select voice...</option>
-                    </select>
-                    <p class="mt-1 text-xs text-gray-500">Voices will load after selecting target language</p>
+                    <label for="voice-id" class="block text-sm font-medium text-slate-300 mb-2">Voice</label>
+                    <div class="flex gap-2">
+                        <select id="voice-id" name="voice_id" class="flex-1 px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-white" required>
+                            <option value="">Select voice...</option>
+                        </select>
+                        <button type="button" id="preview-voice-btn" class="px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled title="Preview voice">
+                            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd" />
+                            </svg>
+                        </button>
+                    </div>
+                    <p class="mt-1 text-xs text-slate-500">Select language first, then click ▶ to preview</p>
+                    <audio id="voice-preview-player" class="hidden"></audio>
                 </div>
 
                 <!-- Context (Optional) -->
                 <div class="mb-4">
-                    <label for="context" class="block text-sm font-medium text-gray-700 mb-2">
-                        Context (Optional)
+                    <label for="context" class="block text-sm font-medium text-slate-300 mb-2">
+                        Context <span class="text-slate-500">(Optional)</span>
                     </label>
-                    <textarea id="context" name="context" rows="3" maxlength="500" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" placeholder="e.g., This is a fantasy novel with medieval setting"></textarea>
-                    <p class="mt-1 text-xs text-gray-500">Helps improve translation accuracy (max 500 characters)</p>
+                    <textarea id="context" name="context" rows="2" maxlength="500" class="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-white placeholder-slate-600" placeholder="e.g., Fantasy novel, Medieval setting"></textarea>
+                    <p class="mt-1 text-xs text-slate-500">Helps improve translation accuracy</p>
                 </div>
 
                 <!-- Submit Button -->
-                <button type="submit" class="w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors">
+                <button type="submit" class="w-full bg-gradient-to-r from-blue-600 to-blue-500 text-white px-4 py-3 rounded-lg hover:from-blue-700 hover:to-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-slate-900 transition-all font-medium shadow-lg shadow-blue-500/30">
                     Start Translation
                 </button>
-            </form>
-        </div>
-
-        <!-- Settings Section -->
-        <div class="bg-white rounded-lg shadow-md p-6">
-            <h2 class="text-xl font-semibold text-gray-900 mb-4">Settings</h2>
-
-            <form hx-post="/api/settings" hx-target="#settings-status" hx-swap="innerHTML">
-                <!-- API Key -->
-                <div class="mb-4">
-                    <label for="api-key" class="block text-sm font-medium text-gray-700 mb-2">Anthropic API Key</label>
-                    <input type="password" id="api-key" name="anthropic_api_key" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" placeholder="sk-ant-...">
-                    <p class="mt-1 text-xs text-gray-500">Required for translation</p>
-                </div>
-
-                <!-- Save Button -->
-                <button type="submit" class="w-full bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors">
-                    Save Settings
-                </button>
-
-                <!-- Status Message -->
-                <div id="settings-status" class="mt-3"></div>
             </form>
         </div>
     </div>
 
     <!-- Right Column: Jobs List -->
     <div class="lg:col-span-2">
-        <div class="bg-white rounded-lg shadow-md p-6">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="text-xl font-semibold text-gray-900">Translation Jobs</h2>
-                <button hx-get="/api/jobs" hx-target="#jobs-container" hx-swap="innerHTML" class="text-sm text-blue-600 hover:text-blue-800">
+        <div class="bg-slate-900 rounded-xl shadow-xl p-6 border border-slate-800">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-lg font-semibold text-white flex items-center">
+                    <svg class="w-5 h-5 mr-2 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                    Translation Jobs
+                </h2>
+                <button hx-get="/api/jobs" hx-target="#jobs-container" hx-swap="innerHTML" class="text-sm text-blue-400 hover:text-blue-300 flex items-center">
+                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                    </svg>
                     Refresh
                 </button>
             </div>
 
             <!-- Jobs Container -->
-            <div id="jobs-container" hx-get="/api/jobs" hx-trigger="load, every 3s" hx-swap="innerHTML">
+            <div id="jobs-container" hx-get="/api/jobs" hx-trigger="load, every 3s" hx-swap="innerHTML" class="min-h-[400px]">
                 <!-- Jobs will be loaded here -->
-                <div class="text-center py-12 text-gray-500">
-                    <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                <div class="text-center py-20 text-slate-500">
+                    <svg class="mx-auto h-16 w-16 text-slate-700 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
-                    <p class="mt-2">No jobs yet. Upload an audio file to get started!</p>
+                    <p class="text-base font-medium">No jobs yet</p>
+                    <p class="text-sm mt-1">Upload a file to get started</p>
                 </div>
             </div>
         </div>
@@ -188,18 +184,22 @@
 
     function displayFileName(file) {
         const fileSize = (file.size / (1024 * 1024)).toFixed(2);
-        fileNameDisplay.textContent = `Selected: ${file.name} (${fileSize} MB)`;
+        const fileType = file.name.split('.').pop().toUpperCase();
+        fileNameDisplay.innerHTML = `<span class="text-blue-400">📎 ${file.name}</span> <span class="text-slate-500">(${fileSize} MB • ${fileType})</span>`;
     }
 
     // Load voices when target language changes
     const targetLanguageSelect = document.getElementById('target-language');
     const voiceSelect = document.getElementById('voice-id');
+    const previewBtn = document.getElementById('preview-voice-btn');
+    const audioPlayer = document.getElementById('voice-preview-player');
 
     targetLanguageSelect.addEventListener('change', async () => {
         const language = targetLanguageSelect.value;
 
         if (!language) {
             voiceSelect.innerHTML = '<option value="">Select voice...</option>';
+            previewBtn.disabled = true;
             return;
         }
 
@@ -218,10 +218,65 @@
 
             if (voices.length > 0) {
                 voiceSelect.value = voices[0].id;
+                previewBtn.disabled = false;
             }
         } catch (error) {
             console.error('Error loading voices:', error);
             voiceSelect.innerHTML = '<option value="">Error loading voices</option>';
+            previewBtn.disabled = true;
+        }
+    });
+
+    // Enable/disable preview button when voice selection changes
+    voiceSelect.addEventListener('change', () => {
+        previewBtn.disabled = !voiceSelect.value;
+    });
+
+    // Voice preview functionality
+    previewBtn.addEventListener('click', async () => {
+        const voiceId = voiceSelect.value;
+
+        if (!voiceId) {
+            return;
+        }
+
+        // Update button to show loading state
+        const originalHTML = previewBtn.innerHTML;
+        previewBtn.disabled = true;
+        previewBtn.innerHTML = `
+            <svg class="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+        `;
+
+        try {
+            // Fetch the voice preview
+            const response = await fetch(`/api/voices/${voiceId}/preview`);
+
+            if (!response.ok) {
+                throw new Error('Failed to load voice preview');
+            }
+
+            const audioBlob = await response.blob();
+            const audioUrl = URL.createObjectURL(audioBlob);
+
+            // Play the audio
+            audioPlayer.src = audioUrl;
+            await audioPlayer.play();
+
+            // Clean up the URL after playing
+            audioPlayer.addEventListener('ended', () => {
+                URL.revokeObjectURL(audioUrl);
+            }, { once: true });
+
+        } catch (error) {
+            console.error('Error playing voice preview:', error);
+            alert('Failed to load voice preview. Please try again.');
+        } finally {
+            // Restore button state
+            previewBtn.disabled = false;
+            previewBtn.innerHTML = originalHTML;
         }
     });
 
@@ -251,7 +306,7 @@
         const statusBadge = jobCard.querySelector('.status-badge');
         if (statusBadge) {
             statusBadge.textContent = status;
-            statusBadge.className = `status-badge inline-block px-2 py-1 text-xs font-medium text-white rounded status-${status}`;
+            statusBadge.className = `status-badge inline-block px-2 py-1 text-xs font-medium text-white rounded-md status-${status}`;
         }
 
         // Update progress bar
@@ -287,7 +342,7 @@
         if (event.detail.target.id === 'jobs-container' && event.detail.xhr.status === 201) {
             // Clear form after successful upload
             document.getElementById('upload-form').reset();
-            fileNameDisplay.textContent = '';
+            fileNameDisplay.innerHTML = '';
         }
     });
 </script>

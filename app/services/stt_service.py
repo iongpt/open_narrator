@@ -60,7 +60,7 @@ class STTService:
         file_path: str | Path,
         language: str = "en",
         beam_size: int = 5,
-        vad_filter: bool = True,
+        vad_filter: bool | None = None,
     ) -> str:
         """
         Transcribe audio file to text.
@@ -69,7 +69,7 @@ class STTService:
             file_path: Path to audio file (MP3, WAV, etc.)
             language: Language code (e.g., 'en', 'ro', 'es')
             beam_size: Beam size for decoding (higher = more accurate, slower)
-            vad_filter: Whether to use Voice Activity Detection to filter silence
+            vad_filter: Whether to use Voice Activity Detection to filter silence (defaults to settings)
 
         Returns:
             Transcribed text as a single string
@@ -79,6 +79,10 @@ class STTService:
             ValueError: If file is corrupted or invalid format
             RuntimeError: If transcription fails
         """
+        # Use configured VAD filter setting if not explicitly provided
+        if vad_filter is None:
+            vad_filter = self.settings.whisper_vad_filter
+
         path_obj = Path(file_path)
 
         # Validate file exists

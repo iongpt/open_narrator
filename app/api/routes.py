@@ -39,32 +39,73 @@ ALLOWED_AUDIO_TYPES = {
     "audio/mpeg3",
     "audio/x-mpeg-3",
 }
+
+ALLOWED_TEXT_TYPES = {
+    "text/plain",
+    "text/markdown",
+    "text/html",
+    "application/pdf",
+    "application/epub+zip",
+    "application/x-mobipocket-ebook",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",  # DOCX
+    "application/msword",  # DOC
+    "application/rtf",
+    "text/rtf",
+    "application/vnd.oasis.opendocument.text",  # ODT
+}
+
+ALLOWED_TEXT_EXTENSIONS = {
+    ".txt",
+    ".md",
+    ".pdf",
+    ".epub",
+    ".mobi",
+    ".docx",
+    ".doc",
+    ".rtf",
+    ".odt",
+    ".html",
+    ".htm",
+}
+
 MAX_FILE_SIZE = settings.max_upload_size_mb * 1024 * 1024  # Convert to bytes
 
 
-def validate_audio_file(file: UploadFile) -> None:
+def validate_file(file: UploadFile) -> str:
     """
-    Validate uploaded audio file.
+    Validate uploaded file (audio or text).
 
     Args:
         file: The uploaded file to validate
 
+    Returns:
+        File type: 'audio' or 'text'
+
     Raises:
         HTTPException: If file is invalid
     """
-    # Check file type
-    if file.content_type not in ALLOWED_AUDIO_TYPES:
+    if not file.filename:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid file type. Allowed types: {', '.join(ALLOWED_AUDIO_TYPES)}",
+            detail="Filename is required",
         )
 
-    # Check filename
-    if not file.filename or not file.filename.lower().endswith(".mp3"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="File must have .mp3 extension",
-        )
+    filename_lower = file.filename.lower()
+    file_extension = Path(filename_lower).suffix
+
+    # Check if it's an audio file
+    if filename_lower.endswith(".mp3") or file.content_type in ALLOWED_AUDIO_TYPES:
+        return "audio"
+
+    # Check if it's a text file
+    if file_extension in ALLOWED_TEXT_EXTENSIONS or file.content_type in ALLOWED_TEXT_TYPES:
+        return "text"
+
+    # Invalid file type
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="Invalid file type. Allowed: MP3 audio or TXT/MD/PDF/EPUB/MOBI/DOCX/DOC/RTF/ODT/HTML text files",
+    )
 
 
 def sanitize_filename(filename: str) -> str:
@@ -91,7 +132,7 @@ def sanitize_filename(filename: str) -> str:
 
 
 @router.post("/upload", response_model=JobResponse, status_code=status.HTTP_201_CREATED)
-async def upload_audio(
+async def upload_file(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     source_language: str = Form("en"),
@@ -101,11 +142,11 @@ async def upload_audio(
     db: Session = Depends(get_db),
 ) -> Job:
     """
-    Upload an MP3 file for translation.
+    Upload an audio or text file for translation.
 
     Args:
         background_tasks: FastAPI background tasks manager
-        file: The audio file to upload
+        file: The audio or text file to upload
         source_language: Source language code (default: en)
         target_language: Target language code
         voice_id: Voice ID for TTS
@@ -118,8 +159,8 @@ async def upload_audio(
     Raises:
         HTTPException: If file validation fails or upload error occurs
     """
-    # Validate file
-    validate_audio_file(file)
+    # Validate file and get type
+    file_type = validate_file(file)
 
     # Sanitize filename
     safe_filename = sanitize_filename(file.filename or "upload.mp3")
@@ -179,6 +220,7 @@ async def upload_audio(
         target_lang=target_language,
         voice_id=voice_id,
         context=context or "",
+        file_type=file_type,  # Pass file type to pipeline
     )
 
     return job
@@ -349,6 +391,117 @@ async def list_voices(language: str | None = None) -> list[VoiceInfo]:
     voices = engine.list_voices(language)
 
     return voices
+
+
+@router.get("/voices/{voice_id}/preview")
+async def preview_voice(voice_id: str) -> FileResponse:
+    """
+    Generate and serve a preview audio sample for a voice.
+
+    Args:
+        voice_id: The ID of the voice to preview
+
+    Returns:
+        Audio file (MP3) with sample text
+
+    Raises:
+        HTTPException: If voice_id is invalid or preview generation fails
+    """
+    import logging
+    import shutil
+
+    from app.services.tts_service import TTSService, get_tts_engine
+
+    logger = logging.getLogger(__name__)
+
+    try:
+        # Get TTS engine
+        engine = get_tts_engine()
+
+        # Get voice info to determine language
+        voice_info = engine.get_voice_info(voice_id)
+
+        # Sample text in different languages (pre-prepared)
+        sample_texts = {
+            "en": "Welcome! This is a preview of how this voice sounds for your audiobook translation.",
+            "ro": "Bună ziua! Aceasta este o previzualizare a acestei voci pentru traducerea cărții tale audio.",
+            "es": "¡Bienvenido! Esta es una muestra de cómo suena esta voz para tu audiolibro traducido.",
+            "fr": "Bienvenue! Ceci est un aperçu de cette voix pour votre livre audio traduit.",
+            "de": "Willkommen! Dies ist eine Hörprobe dieser Stimme für Ihr übersetztes Hörbuch.",
+            "it": "Benvenuto! Questa è un'anteprima di come suona questa voce per il tuo audiolibro tradotto.",
+            "pt": "Bem-vindo! Esta é uma prévia de como esta voz soa para seu audiolivro traduzido.",
+            "nl": "Welkom! Dit is een voorproefje van hoe deze stem klinkt voor uw vertaalde audioboek.",
+            "pl": "Witaj! To jest podgląd tego głosu dla Twojego przetłumaczonego audiobooka.",
+            "ru": "Добро пожаловать! Это образец звучания этого голоса для вашей переведённой аудиокниги.",
+            "uk": "Ласкаво просимо! Це зразок звучання цього голосу для вашої перекладеної аудіокниги.",
+            "ja": "ようこそ！これはあなたの翻訳されたオーディオブックのための音声サンプルです。",
+            "zh": "欢迎！这是您翻译的有声读物的语音示例。",
+            "ko": "환영합니다! 번역된 오디오북을 위한 음성 샘플입니다.",
+            "ar": "مرحباً! هذه عينة صوتية لكتابك الصوتي المترجم.",
+            "hi": "स्वागत है! यह आपकी अनुवादित ऑडियोबुक के लिए आवाज़ का नमूना है।",
+            "tr": "Hoş geldiniz! Bu, çevrilmiş sesli kitabınız için ses örneğidir.",
+        }
+
+        # Get sample text for voice language
+        sample_text = sample_texts.get(voice_info.language, sample_texts["en"])
+
+        # Check if sample already exists (CACHE)
+        sample_dir = settings.static_dir / "voice_samples"
+        sample_dir.mkdir(parents=True, exist_ok=True)
+        sample_path = sample_dir / f"{voice_id}.mp3"
+
+        # Return cached version if it exists
+        if sample_path.exists():
+            logger.info(f"Serving cached voice preview for {voice_id}")
+            return FileResponse(
+                path=sample_path,
+                media_type="audio/mpeg",
+                filename=f"{voice_id}_sample.mp3",
+            )
+
+        # Generate sample if it doesn't exist
+        logger.info(f"Generating new voice preview for {voice_id}")
+        tts_service = TTSService(engine)
+        audio_path = await tts_service.generate_audio(
+            text=sample_text,
+            voice_id=voice_id,
+            language=voice_info.language,
+        )
+
+        # Copy (not move) to samples directory
+        try:
+            shutil.copy2(audio_path, sample_path)
+            logger.info(f"Copied voice preview to {sample_path}")
+
+            # Clean up original file if it's in temp directory
+            audio_path_obj = Path(audio_path)
+            if audio_path_obj.exists() and "output" in str(audio_path_obj):
+                audio_path_obj.unlink()
+                logger.debug(f"Deleted temporary file: {audio_path}")
+
+        except Exception as copy_error:
+            logger.error(f"Failed to copy preview file: {copy_error}")
+            # If copy fails, just use the generated file directly
+            sample_path = Path(audio_path)
+
+        return FileResponse(
+            path=sample_path,
+            media_type="audio/mpeg",
+            filename=f"{voice_id}_sample.mp3",
+        )
+
+    except ValueError as e:
+        logger.error(f"Invalid voice ID {voice_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        ) from e
+    except Exception as e:
+        logger.error(f"Failed to generate voice preview for {voice_id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate voice preview: {str(e)}",
+        ) from e
 
 
 @router.post("/settings", status_code=status.HTTP_200_OK)

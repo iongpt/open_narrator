@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     output_dir: Path = Path("./data/outputs")
     model_dir: Path = Path("./data/models")
     debug_dir: Path = Path("./data/debug")  # Debug files (transcripts, translations)
+    static_dir: Path = Path("./app/static")  # Static files (voice samples, etc.)
     max_upload_size_mb: int = 50
 
     # AI Services
@@ -50,6 +51,7 @@ class Settings(BaseSettings):
     whisper_compute_type: Literal["auto", "int8", "int8_float16", "int8_float32", "float16"] = (
         "auto"
     )
+    whisper_vad_filter: bool = False  # Voice Activity Detection - can cause truncation issues
 
     # Translation Settings
     translation_model: str = "claude-sonnet-4.5-20250514"
@@ -88,6 +90,7 @@ class Settings(BaseSettings):
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.model_dir.mkdir(parents=True, exist_ok=True)
         self.debug_dir.mkdir(parents=True, exist_ok=True)
+        self.static_dir.mkdir(parents=True, exist_ok=True)
 
 
 @lru_cache

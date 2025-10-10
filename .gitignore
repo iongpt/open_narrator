@@ -80,3 +80,9 @@ Thumbs.db
 /PERFORMANCE.md
 /tests/sample/sample-big.mp3
 /SECURITY_AUDIT.md
+/data/debug/job11_transcript.txt
+/data/debug/job12_transcript.txt
+/data/debug/job12_translation.txt
+/app/static/voice_samples/ro_RO-mihai-medium.mp3
+/data/debug/job14_transcript.txt
+/data/debug/job14_translation.txt

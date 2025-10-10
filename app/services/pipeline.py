@@ -30,26 +30,34 @@ async def process_audio(
     target_lang: str,
     voice_id: str,
     context: str = "",
+    file_type: str = "audio",
 ) -> None:
     """
-    Process an audio file through the complete translation pipeline.
+    Process an audio or text file through the complete translation pipeline.
 
     This function orchestrates the entire workflow:
-    1. Stage 1: Transcription (0-30% progress)
-    2. Stage 2: Translation (30-70% progress)
-    3. Stage 3: Audio Generation (70-95% progress)
-    4. Stage 4: Finalization (95-100% progress)
+    - For audio files:
+        1. Stage 1: Transcription (0-30% progress)
+        2. Stage 2: Translation (30-70% progress)
+        3. Stage 3: Audio Generation (70-95% progress)
+        4. Stage 4: Finalization (95-100% progress)
+    - For text files:
+        1. Stage 1: Text Extraction (0-30% progress)
+        2. Stage 2: Translation (30-70% progress)
+        3. Stage 3: Audio Generation (70-95% progress)
+        4. Stage 4: Finalization (95-100% progress)
 
     Progress updates are sent via SSE after each stage, and the job is
     updated in the database with partial results (transcript, translation).
 
     Args:
         job_id: Database ID of the job to process
-        file_path: Path to the uploaded audio file
+        file_path: Path to the uploaded audio or text file
         source_lang: Source language code (e.g., "en")
         target_lang: Target language code (e.g., "ro")
         voice_id: Voice ID for TTS generation
         context: Optional context for translation (e.g., "mystery novel")
+        file_type: Type of file - "audio" or "text" (default: "audio")
 
     Raises:
         None: All exceptions are caught and saved to job.error_message
@@ -58,7 +66,7 @@ async def process_audio(
     db = SessionLocal()
 
     try:
-        logger.info(f"Starting pipeline processing for job {job_id}")
+        logger.info(f"Starting pipeline processing for job {job_id} (type: {file_type})")
 
         # Fetch job from database
         job = db.query(Job).filter(Job.id == job_id).first()
@@ -67,35 +75,67 @@ async def process_audio(
             return
 
         # ============================================================
-        # STAGE 1: TRANSCRIPTION (0-30% progress)
+        # STAGE 1: TRANSCRIPTION / TEXT EXTRACTION (0-30% progress)
         # ============================================================
         try:
-            logger.info(f"[Job {job_id}] Stage 1: Starting transcription")
+            if file_type == "text":
+                logger.info(f"[Job {job_id}] Stage 1: Extracting text from file")
 
-            # Update job status
-            job.status = JobStatus.TRANSCRIBING
-            job.progress = 0.0
-            db.commit()
-            db.refresh(job)
+                # Update job status
+                job.status = (
+                    JobStatus.TRANSCRIBING
+                )  # Reusing transcribing status for text extraction
+                job.progress = 0.0
+                db.commit()
+                db.refresh(job)
 
-            # Send progress update via SSE
-            await send_progress_update(
-                ProgressUpdate(
-                    job_id=job_id,
-                    status=JobStatus.TRANSCRIBING,
-                    progress=0.0,
-                    message="Starting transcription...",
+                # Send progress update via SSE
+                await send_progress_update(
+                    ProgressUpdate(
+                        job_id=job_id,
+                        status=JobStatus.TRANSCRIBING,
+                        progress=0.0,
+                        message="Extracting text from file...",
+                    )
                 )
-            )
 
-            # Initialize STT service and transcribe
-            stt_service = STTService()
-            transcript = await stt_service.transcribe(
-                file_path=file_path,
-                language=source_lang,
-            )
+                # Initialize text extraction service and extract text
+                from app.services.text_extraction_service import get_text_extraction_service
 
-            logger.info(f"[Job {job_id}] Transcription complete: {len(transcript)} characters")
+                text_service = get_text_extraction_service()
+                transcript = text_service.extract_text(file_path=file_path)
+
+                logger.info(
+                    f"[Job {job_id}] Text extraction complete: {len(transcript)} characters"
+                )
+
+            else:  # audio file
+                logger.info(f"[Job {job_id}] Stage 1: Starting transcription")
+
+                # Update job status
+                job.status = JobStatus.TRANSCRIBING
+                job.progress = 0.0
+                db.commit()
+                db.refresh(job)
+
+                # Send progress update via SSE
+                await send_progress_update(
+                    ProgressUpdate(
+                        job_id=job_id,
+                        status=JobStatus.TRANSCRIBING,
+                        progress=0.0,
+                        message="Starting transcription...",
+                    )
+                )
+
+                # Initialize STT service and transcribe
+                stt_service = STTService()
+                transcript = await stt_service.transcribe(
+                    file_path=file_path,
+                    language=source_lang,
+                )
+
+                logger.info(f"[Job {job_id}] Transcription complete: {len(transcript)} characters")
 
             # Save transcript to database
             job.transcript = transcript
