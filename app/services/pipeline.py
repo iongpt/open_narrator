@@ -19,6 +19,7 @@ from app.database import SessionLocal
 from app.models import Job, JobStatus
 from app.schemas import ProgressUpdate
 from app.services.stt_service import get_stt_service
+from app.services.text_preprocessor import TextPreprocessor
 from app.services.translation_service import TranslationService
 from app.services.tts_service import TTSService
 
@@ -108,6 +109,7 @@ async def process_audio(
     """
     # Create a new database session for this background task
     db = SessionLocal()
+    preprocessor = TextPreprocessor()
 
     try:
         logger.info(f"Starting pipeline processing for job {job_id} (type: {file_type})")
@@ -462,8 +464,9 @@ async def process_audio(
                 loop.call_soon_threadsafe(update_db_and_send_sse)
 
             # Generate audio
+            prepared_translation = preprocessor.prepare_for_tts(translation)
             output_path = await tts_service.generate_audio(
-                text=translation,
+                text=prepared_translation,
                 voice_id=voice_id,
                 language=target_lang,
                 progress_callback=tts_progress_callback,
