@@ -63,6 +63,7 @@ async def process_audio(
     voice_id: str,
     context: str = "",
     file_type: str = "audio",
+    skip_translation: bool = False,
 ) -> None:
     """
     Process an audio or text file through the complete translation pipeline.
@@ -78,6 +79,10 @@ async def process_audio(
         2. Stage 2: Translation (30-70% progress)
         3. Stage 3: Audio Generation (70-95% progress)
         4. Stage 4: Finalization (95-100% progress)
+    - For text files with skip_translation:
+        1. Stage 1: Text Extraction (0-30% progress)
+        2. Stage 2: Audio Generation (30-95% progress)
+        3. Stage 3: Finalization (95-100% progress)
 
     Progress updates are sent via SSE after each stage, and the job is
     updated in the database with partial results (transcript, translation).
@@ -90,6 +95,7 @@ async def process_audio(
         voice_id: Voice ID for TTS generation
         context: Optional context for translation (e.g., "mystery novel")
         file_type: Type of file - "audio" or "text" (default: "audio")
+        skip_translation: Skip translation stage (content already in target language)
 
     Raises:
         None: All exceptions are caught and saved to job.error_message
@@ -249,92 +255,20 @@ async def process_audio(
         # ============================================================
         # STAGE 2: TRANSLATION (30-70% progress)
         # ============================================================
-        try:
-            logger.info(f"[Job {job_id}] Stage 2: Starting translation")
-
-            # Update job status
-            job.status = JobStatus.TRANSLATING
-            job.progress = 30.0
-            db.commit()
-            db.refresh(job)
-
-            # Send progress update
-            await send_progress_update(
-                ProgressUpdate(
-                    job_id=job_id,
-                    status=JobStatus.TRANSLATING,
-                    progress=30.0,
-                    message="Starting translation...",
-                )
+        # Skip translation if content is already in target language
+        if skip_translation:
+            logger.info(
+                f"[Job {job_id}] Stage 2: Skipping translation (content already in target language)"
             )
+            # Use transcript as the final text (no translation needed)
+            translation = transcript
 
-            # Initialize translation service
-            translation_service = TranslationService()
-
-            # Capture event loop for translation callbacks
-            loop = asyncio.get_running_loop()
-
-            # Create progress callback for translation chunks
-            def translation_progress_callback(
-                current_chunk: int, total_chunks: int, message: str
-            ) -> None:
-                """Update progress during translation."""
-                # Map chunk progress to 30-70% range
-                chunk_progress = (current_chunk / total_chunks) if total_chunks > 0 else 0
-                progress = 30.0 + (chunk_progress * 40.0)
-
-                # Schedule DB update on main thread via call_soon_threadsafe
-                def update_db_and_send_sse() -> None:
-                    """Runs on main event loop thread."""
-                    try:
-                        # job is guaranteed to be non-None at this point
-                        assert job is not None, "Job should not be None in callback"
-                        # Refresh job to avoid stale data
-                        db.refresh(job)
-                        job.progress = progress
-                        db.commit()
-
-                        # Schedule SSE update as async task
-                        asyncio.create_task(
-                            send_progress_update(
-                                ProgressUpdate(
-                                    job_id=job_id,
-                                    status=JobStatus.TRANSLATING,
-                                    progress=progress,
-                                    message=message,
-                                )
-                            )
-                        )
-                    except Exception as e:
-                        logger.error(f"Failed to update progress during translation: {e}")
-
-                # Schedule on main thread
-                loop.call_soon_threadsafe(update_db_and_send_sse)
-
-            # Translate text
-            translation = await translation_service.translate(
-                text=transcript,
-                source_lang=source_lang,
-                target_lang=target_lang,
-                context=context,
-                progress_callback=translation_progress_callback,
-            )
-
-            logger.info(f"[Job {job_id}] Translation complete: {len(translation)} characters")
-
-            # Save translation to database
+            # Update job with the "translation" (which is just the original text)
             job.translation = translation
             job.status = JobStatus.TRANSLATED
             job.progress = 70.0
             db.commit()
             db.refresh(job)
-
-            # Save translation to debug file if debug mode is enabled
-            if settings.debug:
-                debug_translation_path = settings.debug_dir / f"job{job_id}_translation.txt"
-                with open(debug_translation_path, "w", encoding="utf-8") as f:
-                    f.write(translation)
-                logger.info(f"Saved translation to debug file: {debug_translation_path}")
 
             # Send progress update
             await send_progress_update(
@@ -342,19 +276,117 @@ async def process_audio(
                     job_id=job_id,
                     status=JobStatus.TRANSLATED,
                     progress=70.0,
-                    message="Translation complete",
+                    message="Translation skipped (content already in target language)",
                 )
             )
+        else:
+            # Normal translation flow
+            try:
+                logger.info(f"[Job {job_id}] Stage 2: Starting translation")
 
-        except Exception as e:
-            logger.error(f"[Job {job_id}] Translation failed: {str(e)}")
-            await _handle_job_failure(
-                db,
-                job,
-                f"Translation failed: {str(e)}",
-                JobStatus.TRANSLATING,
-            )
-            return
+                # Update job status
+                job.status = JobStatus.TRANSLATING
+                job.progress = 30.0
+                db.commit()
+                db.refresh(job)
+
+                # Send progress update
+                await send_progress_update(
+                    ProgressUpdate(
+                        job_id=job_id,
+                        status=JobStatus.TRANSLATING,
+                        progress=30.0,
+                        message="Starting translation...",
+                    )
+                )
+
+                # Initialize translation service
+                translation_service = TranslationService()
+
+                # Capture event loop for translation callbacks
+                loop = asyncio.get_running_loop()
+
+                # Create progress callback for translation chunks
+                def translation_progress_callback(
+                    current_chunk: int, total_chunks: int, message: str
+                ) -> None:
+                    """Update progress during translation."""
+                    # Map chunk progress to 30-70% range
+                    chunk_progress = (current_chunk / total_chunks) if total_chunks > 0 else 0
+                    progress = 30.0 + (chunk_progress * 40.0)
+
+                    # Schedule DB update on main thread via call_soon_threadsafe
+                    def update_db_and_send_sse() -> None:
+                        """Runs on main event loop thread."""
+                        try:
+                            # job is guaranteed to be non-None at this point
+                            assert job is not None, "Job should not be None in callback"
+                            # Refresh job to avoid stale data
+                            db.refresh(job)
+                            job.progress = progress
+                            db.commit()
+
+                            # Schedule SSE update as async task
+                            asyncio.create_task(
+                                send_progress_update(
+                                    ProgressUpdate(
+                                        job_id=job_id,
+                                        status=JobStatus.TRANSLATING,
+                                        progress=progress,
+                                        message=message,
+                                    )
+                                )
+                            )
+                        except Exception as e:
+                            logger.error(f"Failed to update progress during translation: {e}")
+
+                    # Schedule on main thread
+                    loop.call_soon_threadsafe(update_db_and_send_sse)
+
+                # Translate text
+                translation = await translation_service.translate(
+                    text=transcript,
+                    source_lang=source_lang,
+                    target_lang=target_lang,
+                    context=context,
+                    progress_callback=translation_progress_callback,
+                )
+
+                logger.info(f"[Job {job_id}] Translation complete: {len(translation)} characters")
+
+                # Save translation to database
+                job.translation = translation
+                job.status = JobStatus.TRANSLATED
+                job.progress = 70.0
+                db.commit()
+                db.refresh(job)
+
+                # Save translation to debug file if debug mode is enabled
+                if settings.debug:
+                    debug_translation_path = settings.debug_dir / f"job{job_id}_translation.txt"
+                    with open(debug_translation_path, "w", encoding="utf-8") as f:
+                        f.write(translation)
+                    logger.info(f"Saved translation to debug file: {debug_translation_path}")
+
+                # Send progress update
+                await send_progress_update(
+                    ProgressUpdate(
+                        job_id=job_id,
+                        status=JobStatus.TRANSLATED,
+                        progress=70.0,
+                        message="Translation complete",
+                    )
+                )
+
+            except Exception as e:
+                logger.error(f"[Job {job_id}] Translation failed: {str(e)}")
+                await _handle_job_failure(
+                    db,
+                    job,
+                    f"Translation failed: {str(e)}",
+                    JobStatus.TRANSLATING,
+                )
+                return
 
         # ============================================================
         # STAGE 3: AUDIO GENERATION (70-95% progress)

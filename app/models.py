@@ -3,7 +3,7 @@
 from datetime import datetime
 from enum import Enum as PyEnum
 
-from sqlalchemy import Enum, Float, Integer, String, Text
+from sqlalchemy import Boolean, Enum, Float, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -48,6 +48,9 @@ class Job(Base):
 
     # Context for translation
     context: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Skip translation flag (content already in target language)
+    skip_translation: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     # Processing status
     status: Mapped[JobStatus] = mapped_column(

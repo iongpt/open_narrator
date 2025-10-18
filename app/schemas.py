@@ -15,6 +15,7 @@ class JobCreate(BaseModel):
     target_language: str = Field(..., min_length=2, max_length=10)
     voice_id: str = Field(..., min_length=1, max_length=100)
     context: str | None = Field(default=None, max_length=5000)
+    skip_translation: bool = Field(default=False)
 
 
 class JobUpdate(BaseModel):
@@ -37,6 +38,7 @@ class JobResponse(BaseModel):
     target_language: str
     voice_id: str
     context: str | None
+    skip_translation: bool
     status: JobStatus
     progress: float
     error_message: str | None

@@ -160,6 +160,7 @@ async def upload_file(
     target_language: str = Form(...),
     voice_id: str = Form(...),
     context: str | None = Form(None),
+    skip_translation: bool = Form(False),
     db: Session = Depends(get_db),
 ) -> Job:
     """
@@ -172,6 +173,7 @@ async def upload_file(
         target_language: Target language code
         voice_id: Voice ID for TTS
         context: Optional context for translation
+        skip_translation: Skip translation (content already in target language)
         db: Database session
 
     Returns:
@@ -182,6 +184,13 @@ async def upload_file(
     """
     # Validate file and get type
     file_type = validate_file(file)
+
+    # Validate skip_translation: only text files allowed
+    if skip_translation and file_type == "audio":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Audio files cannot be used with skip_translation. Only text files are supported when content is already in target language.",
+        )
 
     # Sanitize filename
     safe_filename = sanitize_filename(file.filename or "upload.mp3")
@@ -229,6 +238,7 @@ async def upload_file(
         target_language=target_language,
         voice_id=voice_id,
         context=context,
+        skip_translation=skip_translation,
         status=JobStatus.PENDING,
         progress=0.0,
     )
@@ -247,6 +257,7 @@ async def upload_file(
         voice_id=voice_id,
         context=context or "",
         file_type=file_type,  # Pass file type to pipeline
+        skip_translation=skip_translation,  # Pass skip_translation flag to pipeline
     )
 
     return job
