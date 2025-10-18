@@ -420,6 +420,19 @@
         // Reconnect will happen automatically
     });
 
+    // Playback rate controls on completed jobs
+    const audioPlayers = document.querySelectorAll('[data-audio-player]');
+    audioPlayers.forEach(player => {
+        const jobId = player.getAttribute('data-job-id');
+        const rateSelect = document.getElementById(`playback-rate-${jobId}`);
+
+        if (rateSelect) {
+            rateSelect.addEventListener('change', () => {
+                player.playbackRate = Number.parseFloat(rateSelect.value);
+            });
+        }
+    });
+
     function updateJobProgress(jobId, status, progress, message) {
         const jobCard = document.querySelector(`[data-job-id="${jobId}"]`);
 
