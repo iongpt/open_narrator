@@ -409,10 +409,87 @@
 
     // Server-Sent Events for real-time progress updates
     const eventSource = new EventSource('/progress');
+    const jobsContainer = document.getElementById('jobs-container');
+    const originalJobsTrigger = jobsContainer?.getAttribute('hx-trigger') || '';
+    let refreshDisabled = false;
+
+    function setJobsAutoRefresh(enabled) {
+        if (!jobsContainer || !originalJobsTrigger) {
+            return;
+        }
+        if (enabled && refreshDisabled) {
+            jobsContainer.setAttribute('hx-trigger', originalJobsTrigger);
+            refreshDisabled = false;
+        } else if (!enabled && !refreshDisabled) {
+            jobsContainer.setAttribute('hx-trigger', 'load');
+            refreshDisabled = true;
+        }
+    }
+
+    function isAnyAudioPlaying() {
+        return Array.from(document.querySelectorAll('[data-audio-player]')).some(
+            (player) => !player.paused
+        );
+    }
+
+    function initAudioPlayers() {
+        const players = document.querySelectorAll('[data-audio-player]');
+
+        players.forEach((player) => {
+            if (player.dataset.playerInitialized) {
+                return;
+            }
+
+            const jobId = player.getAttribute('data-job-id');
+            const rateSelect = document.getElementById(`playback-rate-${jobId}`);
+            if (!jobId || !rateSelect) {
+                return;
+            }
+
+            const storageKey = `playbackRate:${jobId}`;
+            const storedRate = localStorage.getItem(storageKey);
+            if (storedRate) {
+                rateSelect.value = storedRate;
+                player.playbackRate = Number.parseFloat(storedRate);
+            }
+
+            rateSelect.addEventListener('change', () => {
+                const newRate = Number.parseFloat(rateSelect.value);
+                player.playbackRate = newRate;
+                localStorage.setItem(storageKey, newRate.toString());
+            });
+
+            const handlePauseOrEnd = () => {
+                if (!isAnyAudioPlaying()) {
+                    setJobsAutoRefresh(true);
+                    htmx.trigger('#jobs-container', 'refresh');
+                }
+            };
+
+            player.addEventListener('play', () => {
+                setJobsAutoRefresh(false);
+            });
+
+            player.addEventListener('pause', handlePauseOrEnd);
+            player.addEventListener('ended', handlePauseOrEnd);
+
+            player.dataset.playerInitialized = 'true';
+        });
+    }
+
+    initAudioPlayers();
+
+    document.addEventListener('htmx:afterSwap', (event) => {
+        if (event.target && event.target.id === 'jobs-container') {
+            initAudioPlayers();
+        }
+    });
 
     eventSource.addEventListener('progress', (e) => {
         const data = JSON.parse(e.data);
-        updateJobProgress(data.job_id, data.status, data.progress, data.message);
+        if (!isAnyAudioPlaying()) {
+            updateJobProgress(data.job_id, data.status, data.progress, data.message);
+        }
     });
 
     eventSource.addEventListener('error', (e) => {
@@ -421,17 +498,7 @@
     });
 
     // Playback rate controls on completed jobs
-    const audioPlayers = document.querySelectorAll('[data-audio-player]');
-    audioPlayers.forEach(player => {
-        const jobId = player.getAttribute('data-job-id');
-        const rateSelect = document.getElementById(`playback-rate-${jobId}`);
-
-        if (rateSelect) {
-            rateSelect.addEventListener('change', () => {
-                player.playbackRate = Number.parseFloat(rateSelect.value);
-            });
-        }
-    });
+    initAudioPlayers();
 
     function updateJobProgress(jobId, status, progress, message) {
         const jobCard = document.querySelector(`[data-job-id="${jobId}"]`);
