@@ -63,31 +63,6 @@
 
             <!-- Actions and Metadata -->
             <div class="space-y-3 pt-2 border-t border-slate-800">
-                {% if job.status == 'completed' and job.output_path %}
-                <div class="bg-slate-900 border border-slate-800 rounded-lg p-3">
-                    <div class="flex items-center justify-between mb-2">
-                        <span class="text-sm font-medium text-slate-200">Preview Audio</span>
-                        <div class="flex items-center space-x-2 text-xs text-slate-400">
-                            <label for="playback-rate-{{ job.id }}" class="flex items-center space-x-1">
-                                <span>Speed</span>
-                                <select id="playback-rate-{{ job.id }}" class="bg-slate-950 border border-slate-700 rounded px-2 py-1 focus:outline-none">
-                                    <option value="0.75">0.75×</option>
-                                    <option value="1" selected>1.00×</option>
-                                    <option value="1.25">1.25×</option>
-                                    <option value="1.5">1.50×</option>
-                                    <option value="1.75">1.75×</option>
-                                    <option value="2">2.00×</option>
-                                </select>
-                            </label>
-                        </div>
-                    </div>
-                    <audio controls preload="none" class="w-full" data-audio-player data-job-id="{{ job.id }}">
-                        <source src="/api/jobs/{{ job.id }}/stream" type="audio/mpeg">
-                        Your browser does not support the audio element.
-                    </audio>
-                </div>
-                {% endif %}
-
                 <div class="flex justify-between items-center text-sm">
                     <span class="text-slate-500">
                         {{ job.created_at.strftime('%Y-%m-%d %H:%M') }}
@@ -101,6 +76,17 @@
                             </svg>
                             Download
                         </a>
+                        {% if job.output_path %}
+                        <button type="button"
+                                data-play-audio
+                                data-job-id="{{ job.id }}"
+                                class="inline-flex items-center px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors text-sm font-medium">
+                            <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-1-11.5a.5.5 0 00-.78.41v6.18a.5.5 0 00.78.41l4.15-3.09a.5.5 0 000-.82L9 6.5z" clip-rule="evenodd" />
+                            </svg>
+                            Play
+                        </button>
+                        {% endif %}
                         {% endif %}
                         <button hx-delete="/api/jobs/{{ job.id }}"
                                 hx-confirm="Are you sure you want to delete this job?"

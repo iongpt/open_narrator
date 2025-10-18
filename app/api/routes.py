@@ -447,12 +447,9 @@ async def stream_job_audio(job_id: int, db: Session = Depends(get_db)) -> FileRe
             detail=f"Audio file not found for job {job_id}",
         )
 
-    headers = {"Accept-Ranges": "bytes"}
-
     return FileResponse(
         path=output_path,
         media_type="audio/mpeg",
-        headers=headers,
     )
 
 

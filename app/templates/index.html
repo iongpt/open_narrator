@@ -409,79 +409,138 @@
 
     // Server-Sent Events for real-time progress updates
     const eventSource = new EventSource('/progress');
-    const jobsContainer = document.getElementById('jobs-container');
-    const originalJobsTrigger = jobsContainer?.getAttribute('hx-trigger') || '';
-    let refreshDisabled = false;
+    let audioModal = null;
+    let audioPlayer = null;
+    let rateSelect = null;
 
-    function setJobsAutoRefresh(enabled) {
-        if (!jobsContainer || !originalJobsTrigger) {
+    function ensureAudioModal() {
+        if (audioModal) {
             return;
         }
-        if (enabled && refreshDisabled) {
-            jobsContainer.setAttribute('hx-trigger', originalJobsTrigger);
-            refreshDisabled = false;
-        } else if (!enabled && !refreshDisabled) {
-            jobsContainer.setAttribute('hx-trigger', 'load');
-            refreshDisabled = true;
+
+        audioModal = document.createElement('div');
+        audioModal.id = 'audio-modal';
+        audioModal.className = 'fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 hidden';
+        audioModal.innerHTML = `
+            <div class="bg-slate-900 border border-slate-800 rounded-xl shadow-xl max-w-2xl w-full mx-4">
+                <div class="flex items-center justify-between px-5 py-3 border-b border-slate-800">
+                    <h3 class="text-lg font-semibold text-white">Audiobook Preview</h3>
+                    <button id="audio-modal-close" class="text-slate-400 hover:text-white">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+                <div class="p-5 space-y-4">
+                    <div class="flex items-center space-x-3">
+                        <label for="modal-playback-rate" class="text-sm text-slate-400">Speed</label>
+                        <select id="modal-playback-rate" class="bg-slate-950 border border-slate-700 rounded px-3 py-2 text-white focus:outline-none">
+                            <option value="0.75">0.75×</option>
+                            <option value="1" selected>1.00×</option>
+                            <option value="1.25">1.25×</option>
+                            <option value="1.5">1.50×</option>
+                            <option value="1.75">1.75×</option>
+                            <option value="2">2.00×</option>
+                        </select>
+                    </div>
+                    <audio id="modal-audio-player" controls preload="none" class="w-full">
+                        Your browser does not support the audio element.
+                    </audio>
+                    <div class="flex justify-end">
+                        <button id="audio-modal-close-secondary" class="px-4 py-2 text-sm font-medium text-white bg-slate-700 hover:bg-slate-600 rounded-lg">Close</button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(audioModal);
+
+        audioPlayer = document.getElementById('modal-audio-player');
+        rateSelect = document.getElementById('modal-playback-rate');
+
+        const storageKey = 'playbackRate:modal';
+        const storedRate = localStorage.getItem(storageKey);
+        if (storedRate) {
+            rateSelect.value = storedRate;
+            audioPlayer.playbackRate = Number.parseFloat(storedRate);
         }
-    }
 
-    function isAnyAudioPlaying() {
-        return Array.from(document.querySelectorAll('[data-audio-player]')).some(
-            (player) => !player.paused
-        );
-    }
+        rateSelect.addEventListener('change', () => {
+            const newRate = Number.parseFloat(rateSelect.value);
+            audioPlayer.playbackRate = newRate;
+            localStorage.setItem(storageKey, newRate.toString());
+        });
 
-    function initAudioPlayers() {
-        const players = document.querySelectorAll('[data-audio-player]');
+        const closeButtons = [
+            document.getElementById('audio-modal-close'),
+            document.getElementById('audio-modal-close-secondary'),
+        ];
 
-        players.forEach((player) => {
-            if (player.dataset.playerInitialized) {
-                return;
-            }
-
-            const jobId = player.getAttribute('data-job-id');
-            const rateSelect = document.getElementById(`playback-rate-${jobId}`);
-            if (!jobId || !rateSelect) {
-                return;
-            }
-
-            const storageKey = `playbackRate:${jobId}`;
-            const storedRate = localStorage.getItem(storageKey);
-            if (storedRate) {
-                rateSelect.value = storedRate;
-                player.playbackRate = Number.parseFloat(storedRate);
-            }
-
-            rateSelect.addEventListener('change', () => {
-                const newRate = Number.parseFloat(rateSelect.value);
-                player.playbackRate = newRate;
-                localStorage.setItem(storageKey, newRate.toString());
+        closeButtons.forEach((btn) => {
+            btn?.addEventListener('click', () => {
+                audioPlayer.pause();
+                audioPlayer.src = '';
+                audioModal.classList.add('hidden');
             });
+        });
 
-            const handlePauseOrEnd = () => {
-                if (!isAnyAudioPlaying()) {
-                    setJobsAutoRefresh(true);
-                    htmx.trigger('#jobs-container', 'refresh');
-                }
-            };
-
-            player.addEventListener('play', () => {
-                setJobsAutoRefresh(false);
-            });
-
-            player.addEventListener('pause', handlePauseOrEnd);
-            player.addEventListener('ended', handlePauseOrEnd);
-
-            player.dataset.playerInitialized = 'true';
+        audioModal.addEventListener('click', (event) => {
+            if (event.target === audioModal) {
+                audioPlayer.pause();
+                audioPlayer.src = '';
+                audioModal.classList.add('hidden');
+            }
         });
     }
 
-    initAudioPlayers();
+    function initPlayButtons() {
+        ensureAudioModal();
+
+        const buttons = document.querySelectorAll('[data-play-audio]');
+        buttons.forEach((button) => {
+            if (button.dataset.playerInitialized) {
+                return;
+            }
+
+            button.addEventListener('click', () => {
+                const jobId = button.getAttribute('data-job-id');
+                if (!jobId || !audioPlayer) {
+                    return;
+                }
+
+                const storageKey = `playbackRate:${jobId}`;
+                const storedRate = localStorage.getItem(storageKey);
+                if (storedRate) {
+                    rateSelect.value = storedRate;
+                    audioPlayer.playbackRate = Number.parseFloat(storedRate);
+                } else {
+                    const modalRate = localStorage.getItem('playbackRate:modal');
+                    if (modalRate) {
+                        rateSelect.value = modalRate;
+                        audioPlayer.playbackRate = Number.parseFloat(modalRate);
+                    }
+                }
+
+                const previousPlaybackRate = audioPlayer.playbackRate;
+
+                audioPlayer.src = `/api/jobs/${jobId}/stream`;
+                audioPlayer.playbackRate = previousPlaybackRate;
+                audioPlayer.play().catch((error) => {
+                    console.error('Failed to play audio:', error);
+                });
+
+                audioModal.classList.remove('hidden');
+            });
+
+            button.dataset.playerInitialized = 'true';
+        });
+    }
+
+    initPlayButtons();
 
     document.addEventListener('htmx:afterSwap', (event) => {
         if (event.target && event.target.id === 'jobs-container') {
-            initAudioPlayers();
+            initPlayButtons();
         }
     });
 
