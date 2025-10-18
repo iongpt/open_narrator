@@ -7,7 +7,7 @@ import wave
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import httpx
 from piper import PiperVoice
@@ -472,7 +472,7 @@ class PiperEngine(BaseTTSEngine):
 
         support = self._get_synthesize_wav_support(voice)
 
-        if support["syn_config"]:
+        if support["available"] and support["syn_config"]:
             kwargs: dict[str, Any] = {
                 "text": text,
                 "wav_file": wav_file,
@@ -483,7 +483,7 @@ class PiperEngine(BaseTTSEngine):
             voice.synthesize_wav(**kwargs)
             return
 
-        if synthesis_config is None:
+        if support["available"] and synthesis_config is None:
             kwargs = {"text": text, "wav_file": wav_file}
             if support["set_wav_format"]:
                 kwargs["set_wav_format"] = True
@@ -500,16 +500,21 @@ class PiperEngine(BaseTTSEngine):
         self,
         voice: PiperVoice,
         text: str,
-        synthesis_config: SynthesisConfig,
+        synthesis_config: SynthesisConfig | None,
     ) -> list[AudioChunk]:
         """Collect audio chunks using Piper's synthesize API."""
 
-        try:
-            chunk_iter = voice.synthesize(text, syn_config=synthesis_config)
-        except TypeError:
-            logger.warning(
-                "Piper synthesize() does not accept syn_config; generating with defaults"
-            )
+        chunk_iter: Iterable[AudioChunk]
+
+        if synthesis_config is not None:
+            try:
+                chunk_iter = voice.synthesize(text, syn_config=synthesis_config)
+            except TypeError:
+                logger.warning(
+                    "Piper synthesize() does not accept syn_config; generating with defaults"
+                )
+                chunk_iter = voice.synthesize(text)
+        else:
             chunk_iter = voice.synthesize(text)
 
         chunks = list(chunk_iter)
@@ -532,23 +537,50 @@ class PiperEngine(BaseTTSEngine):
             raise RuntimeError("No audio chunks to write")
 
         first_chunk = chunk_list[0]
-        wav_file.setnchannels(first_chunk.sample_channels)
-        wav_file.setsampwidth(first_chunk.sample_width)
-        wav_file.setframerate(first_chunk.sample_rate)
+        channels = getattr(first_chunk, "sample_channels", 1)
+        sample_width = getattr(first_chunk, "sample_width", 2)
+        sample_rate = getattr(first_chunk, "sample_rate", 22050)
+
+        wav_file.setnchannels(channels)
+        wav_file.setsampwidth(sample_width)
+        wav_file.setframerate(sample_rate)
 
         for chunk in chunk_list:
-            wav_file.writeframes(chunk.audio_int16_bytes)
+            wav_file.writeframes(PiperEngine._chunk_to_bytes(chunk))
+
+    @staticmethod
+    def _chunk_to_bytes(chunk: AudioChunk) -> bytes:
+        """Convert a Piper audio chunk into PCM16 bytes."""
+
+        audio_bytes = getattr(chunk, "audio_int16_bytes", None)
+        if isinstance(audio_bytes, bytes | bytearray):
+            return bytes(audio_bytes)
+
+        if hasattr(chunk, "audio_float_array"):
+            import numpy as np
+
+            audio = chunk.audio_float_array
+            audio = np.asarray(audio, dtype=np.float32)
+            audio = np.clip(audio, -1.0, 1.0)
+            int16_audio = (audio * 32767).astype("<i2")
+            return cast(bytes, int16_audio.tobytes())
+
+        raise RuntimeError("Unsupported Piper audio chunk format")
 
     @staticmethod
     def _get_synthesize_wav_support(voice: PiperVoice) -> dict[str, bool]:
         """Inspect PiperVoice.synthesize_wav signature to detect supported parameters."""
 
+        if not hasattr(voice, "synthesize_wav"):
+            return {"available": False, "syn_config": False, "set_wav_format": False}
+
         try:
             params = inspect.signature(voice.synthesize_wav).parameters
         except (TypeError, ValueError):
-            return {"syn_config": False, "set_wav_format": False}
+            return {"available": True, "syn_config": False, "set_wav_format": False}
 
         return {
+            "available": True,
             "syn_config": "syn_config" in params,
             "set_wav_format": "set_wav_format" in params,
         }
