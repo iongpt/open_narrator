@@ -17,7 +17,7 @@ from fastapi.templating import Jinja2Templates
 
 from app.api import routes, websocket
 from app.config import VERSION, get_settings
-from app.database import init_db
+from app.database import init_db, migrate_database
 
 templates = Jinja2Templates(directory="app/templates")
 
@@ -93,6 +93,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     )
     init_db()
     logger.info("Database initialized successfully")
+
+    # Run migrations for schema changes
+    migrate_database()
+    logger.info("Database migrations completed")
+
     yield
     # Shutdown (cleanup if needed)
     logger.info("Shutting down OpenNarrator application...")

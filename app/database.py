@@ -1,12 +1,14 @@
 """Database setup and session management."""
 
+import logging
 from collections.abc import Generator
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.config import get_settings
 
+logger = logging.getLogger(__name__)
 settings = get_settings()
 
 # Create SQLAlchemy engine
@@ -44,3 +46,46 @@ def get_db() -> Generator[Session, None, None]:
 def init_db() -> None:
     """Initialize database tables."""
     Base.metadata.create_all(bind=engine)
+
+
+def migrate_database() -> None:
+    """
+    Run database migrations for schema changes.
+
+    This function handles adding new columns to existing tables without
+    requiring manual SQL or Alembic migrations. Each migration is idempotent
+    (safe to run multiple times).
+    """
+    with engine.connect() as conn:
+        # Check if we're using SQLite
+        is_sqlite = "sqlite" in settings.database_url
+
+        if is_sqlite:
+            # Migration 1: Add skip_translation column to jobs table (v0.3.0)
+            try:
+                # Check if column exists by querying table info
+                result = conn.execute(text("PRAGMA table_info(jobs)"))
+                columns = [row[1] for row in result]
+
+                if "skip_translation" not in columns:
+                    logger.info("Running migration: Adding skip_translation column to jobs table")
+                    conn.execute(
+                        text(
+                            "ALTER TABLE jobs ADD COLUMN skip_translation BOOLEAN DEFAULT 0 NOT NULL"
+                        )
+                    )
+                    conn.commit()
+                    logger.info("Migration completed successfully")
+                else:
+                    logger.debug("skip_translation column already exists, skipping migration")
+
+            except Exception as e:
+                logger.error(f"Migration failed: {e}")
+                # Don't raise - allow app to continue if migration fails
+                # (column might already exist from fresh install)
+
+        else:
+            # For PostgreSQL/MySQL, use different syntax if needed
+            logger.warning(
+                "Auto-migration only supports SQLite. Please run manual migrations for other databases."
+            )
