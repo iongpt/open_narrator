@@ -1,13 +1,17 @@
 """Piper TTS engine implementation."""
 
+import inspect
 import logging
 import tempfile
 import wave
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import httpx
 from piper import PiperVoice
+from piper.voice import AudioChunk
 from pydub import AudioSegment
 
 try:  # Piper <=1.2.0 may not expose SynthesisConfig
@@ -431,11 +435,11 @@ class PiperEngine(BaseTTSEngine):
 
             # Generate audio
             with wave.open(str(wav_path), "wb") as wav_file:
-                voice.synthesize_wav(
-                    text,
-                    wav_file,
-                    syn_config=synthesis_config,
-                    set_wav_format=True,
+                self._synthesize_to_wav(
+                    voice=voice,
+                    text=text,
+                    wav_file=wav_file,
+                    synthesis_config=synthesis_config,
                 )
 
             logger.info(f"Generated WAV audio: {wav_path}")
@@ -452,6 +456,98 @@ class PiperEngine(BaseTTSEngine):
 
         except Exception as e:
             raise RuntimeError(f"Failed to generate audio: {str(e)}") from e
+
+    def _synthesize_to_wav(
+        self,
+        voice: PiperVoice,
+        text: str,
+        wav_file: wave.Wave_write,
+        synthesis_config: SynthesisConfig | None,
+    ) -> None:
+        """Synthesize speech into an open WAV file, handling legacy Piper versions."""
+
+        support = self._get_synthesize_wav_support(voice)
+
+        if support["syn_config"]:
+            kwargs: dict[str, Any] = {
+                "text": text,
+                "wav_file": wav_file,
+                "syn_config": synthesis_config,
+            }
+            if support["set_wav_format"]:
+                kwargs["set_wav_format"] = True
+            voice.synthesize_wav(**kwargs)
+            return
+
+        if synthesis_config is None:
+            kwargs = {"text": text, "wav_file": wav_file}
+            if support["set_wav_format"]:
+                kwargs["set_wav_format"] = True
+            voice.synthesize_wav(**kwargs)
+            return
+
+        logger.warning(
+            "Piper version does not accept tempo/expressiveness parameters; applying manual fallback"
+        )
+        chunks = self._collect_chunks(voice, text, synthesis_config)
+        self._write_chunks_to_wav(chunks, wav_file)
+
+    def _collect_chunks(
+        self,
+        voice: PiperVoice,
+        text: str,
+        synthesis_config: SynthesisConfig,
+    ) -> list[AudioChunk]:
+        """Collect audio chunks using Piper's synthesize API."""
+
+        try:
+            chunk_iter = voice.synthesize(text, syn_config=synthesis_config)
+        except TypeError:
+            logger.warning(
+                "Piper synthesize() does not accept syn_config; generating with defaults"
+            )
+            chunk_iter = voice.synthesize(text)
+
+        chunks = list(chunk_iter)
+
+        if not chunks:
+            raise RuntimeError("Piper returned no audio chunks")
+
+        return chunks
+
+    @staticmethod
+    def _write_chunks_to_wav(
+        chunks: Iterable[AudioChunk],
+        wav_file: wave.Wave_write,
+    ) -> None:
+        """Write synthesized audio chunks into a WAV file."""
+
+        chunk_list = list(chunks)
+
+        if not chunk_list:
+            raise RuntimeError("No audio chunks to write")
+
+        first_chunk = chunk_list[0]
+        wav_file.setnchannels(first_chunk.sample_channels)
+        wav_file.setsampwidth(first_chunk.sample_width)
+        wav_file.setframerate(first_chunk.sample_rate)
+
+        for chunk in chunk_list:
+            wav_file.writeframes(chunk.audio_int16_bytes)
+
+    @staticmethod
+    def _get_synthesize_wav_support(voice: PiperVoice) -> dict[str, bool]:
+        """Inspect PiperVoice.synthesize_wav signature to detect supported parameters."""
+
+        try:
+            params = inspect.signature(voice.synthesize_wav).parameters
+        except (TypeError, ValueError):
+            return {"syn_config": False, "set_wav_format": False}
+
+        return {
+            "syn_config": "syn_config" in params,
+            "set_wav_format": "set_wav_format" in params,
+        }
 
     def _convert_to_mp3(self, wav_path: Path, mp3_path: Path) -> None:
         """
