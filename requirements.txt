@@ -10,7 +10,7 @@ sqlalchemy==2.0.25
 alembic==1.13.1
 
 # AI/ML - Speech-to-Text
-faster-whisper==1.0.0
+faster-whisper==1.1.0
 torch==2.2.0
 transformers==4.37.0
 numpy<2.0  # Required for compatibility with PyTorch 2.2.0
