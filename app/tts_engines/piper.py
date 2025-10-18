@@ -7,12 +7,16 @@ import wave
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import httpx
 from piper import PiperVoice
-from piper.voice import AudioChunk
 from pydub import AudioSegment
+
+if TYPE_CHECKING:
+    from piper.voice import AudioChunk
+else:  # pragma: no cover - legacy Piper builds without AudioChunk
+    AudioChunk = Any
 
 try:  # Piper <=1.2.0 may not expose SynthesisConfig
     from piper.config import SynthesisConfig
