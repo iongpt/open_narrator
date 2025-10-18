@@ -16,7 +16,7 @@ transformers==4.37.0
 numpy<2.0  # Required for compatibility with PyTorch 2.2.0
 
 # AI/ML - Text-to-Speech
-piper-tts==1.2.0
+piper-tts==1.3.0
 
 # AI/ML - Translation
 anthropic==0.18.0
