@@ -8,7 +8,7 @@ import torch
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Application version - single source of truth
-VERSION = "0.3.1"
+VERSION = "0.3.2"
 
 
 class Settings(BaseSettings):
