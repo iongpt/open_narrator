@@ -15,7 +15,15 @@ class BaseTTSEngine(ABC):
     """
 
     @abstractmethod
-    def generate_audio(self, text: str, voice_id: str, language: str) -> str:
+    def generate_audio(
+        self,
+        text: str,
+        voice_id: str,
+        language: str,
+        *,
+        length_scale: float | None = None,
+        noise_scale: float | None = None,
+    ) -> str:
         """
         Generate audio from text using the specified voice.
 
@@ -23,6 +31,8 @@ class BaseTTSEngine(ABC):
             text: The text to convert to speech
             voice_id: The ID of the voice to use
             language: Language code (e.g., 'en', 'ro', 'es')
+            length_scale: Optional tempo multiplier (lower is faster, higher slower)
+            noise_scale: Optional prosody randomness control
 
         Returns:
             Path to the generated audio file (MP3 format)

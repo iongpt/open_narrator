@@ -422,13 +422,9 @@ async def process_audio(
                 # Map TTS progress (0.0-1.0) to 70-95% range
                 progress = 70.0 + (tts_progress * 25.0)
 
-                # Create informative message based on progress
-                tts_percent = int(tts_progress * 100)
-                if tts_percent < 10:
-                    message = "Generating audio... starting"
-                elif tts_percent < 100:
-                    message = f"Generating audio... {tts_percent}%"
-                else:
+                # Display percentage with a single decimal so long jobs surface progress
+                message = f"Generating audio... {tts_progress * 100:.1f}%"
+                if tts_progress >= 1.0:
                     message = "Generating audio... finalizing"
 
                 # Schedule DB update on main thread via call_soon_threadsafe
@@ -466,6 +462,8 @@ async def process_audio(
                 language=target_lang,
                 progress_callback=tts_progress_callback,
                 job_id=job.id,
+                length_scale=job.length_scale,
+                noise_scale=job.noise_scale,
             )
 
             logger.info(f"[Job {job_id}] Audio generation complete: {output_path}")

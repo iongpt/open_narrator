@@ -75,6 +75,8 @@ class TTSService:
         progress_callback: Callable[[float], None] | None = None,
         *,
         job_id: int | None = None,
+        length_scale: float | None = None,
+        noise_scale: float | None = None,
     ) -> str:
         """
         Generate audio from text with progress tracking.
@@ -85,6 +87,8 @@ class TTSService:
             language: Language code
             progress_callback: Optional callback for progress updates (0.0 to 1.0)
             job_id: Optional job identifier for collision-free filenames
+            length_scale: Optional tempo multiplier (lower speeds up playback)
+            noise_scale: Optional expressiveness multiplier (higher adds variation)
 
         Returns:
             Path to generated audio file (MP3)
@@ -115,6 +119,8 @@ class TTSService:
             language,
             thread_progress if progress_callback else None,
             job_id,
+            length_scale,
+            noise_scale,
         )
 
     def _generate_audio_sync(
@@ -124,6 +130,8 @@ class TTSService:
         language: str,
         progress_callback: Callable[[float], None] | None,
         job_id: int | None,
+        length_scale: float | None,
+        noise_scale: float | None,
     ) -> str:
         """Blocking audio generation executed inside a worker thread."""
         # Debug logging for TTS parameters
@@ -146,7 +154,13 @@ class TTSService:
         if len(sentences) <= 2:
             logger.info(f"Generating audio for short text ({len(sentences)} sentence(s))")
             try:
-                output_path = self.engine.generate_audio(text, voice_id, language)
+                output_path = self.engine.generate_audio(
+                    text,
+                    voice_id,
+                    language,
+                    length_scale=length_scale,
+                    noise_scale=noise_scale,
+                )
 
                 # Debug logging for TTS result
                 if settings.debug:
@@ -171,6 +185,8 @@ class TTSService:
             language,
             progress_callback,
             job_id,
+            length_scale,
+            noise_scale,
         )
 
     def _generate_long_audio_sync(
@@ -180,6 +196,8 @@ class TTSService:
         language: str,
         progress_callback: Callable[[float], None] | None,
         job_id: int | None,
+        length_scale: float | None,
+        noise_scale: float | None,
     ) -> str:
         """
         Generate audio for long text by splitting into chunks.
@@ -207,7 +225,13 @@ class TTSService:
 
         for i, chunk in enumerate(chunks):
             logger.info(f"Generating chunk {i + 1}/{len(chunks)}")
-            chunk_path = self.engine.generate_audio(chunk, voice_id, language)
+            chunk_path = self.engine.generate_audio(
+                chunk,
+                voice_id,
+                language,
+                length_scale=length_scale,
+                noise_scale=noise_scale,
+            )
             audio_paths.append(chunk_path)
 
             chunk_audio = AudioSegment.from_mp3(chunk_path)
@@ -268,6 +292,8 @@ class TTSService:
         language: str,
         progress_callback: Callable[[float], None] | None,
         job_id: int | None,
+        length_scale: float | None,
+        noise_scale: float | None,
     ) -> str:
         """
         Generate audio for multiple sentences with progress tracking.
@@ -297,7 +323,13 @@ class TTSService:
             logger.info(f"Generating sentence {i + 1}/{total_sentences}")
 
             # Generate audio for this sentence
-            sentence_path = self.engine.generate_audio(sentence, voice_id, language)
+            sentence_path = self.engine.generate_audio(
+                sentence,
+                voice_id,
+                language,
+                length_scale=length_scale,
+                noise_scale=noise_scale,
+            )
             audio_paths.append(sentence_path)
 
             # Add to combined audio

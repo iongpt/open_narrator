@@ -67,7 +67,15 @@ def migrate_database() -> None:
                 result = conn.execute(text("PRAGMA table_info(jobs)"))
                 columns = [row[1] for row in result]
 
+                missing_columns = set()
                 if "skip_translation" not in columns:
+                    missing_columns.add("skip_translation")
+                if "length_scale" not in columns:
+                    missing_columns.add("length_scale")
+                if "noise_scale" not in columns:
+                    missing_columns.add("noise_scale")
+
+                if "skip_translation" in missing_columns:
                     logger.info("Running migration: Adding skip_translation column to jobs table")
                     conn.execute(
                         text(
@@ -78,6 +86,22 @@ def migrate_database() -> None:
                     logger.info("Migration completed successfully")
                 else:
                     logger.debug("skip_translation column already exists, skipping migration")
+
+                if "length_scale" in missing_columns:
+                    logger.info("Running migration: Adding length_scale column to jobs table")
+                    conn.execute(text("ALTER TABLE jobs ADD COLUMN length_scale REAL"))
+                    conn.commit()
+                    logger.info("Migration completed successfully")
+                else:
+                    logger.debug("length_scale column already exists, skipping migration")
+
+                if "noise_scale" in missing_columns:
+                    logger.info("Running migration: Adding noise_scale column to jobs table")
+                    conn.execute(text("ALTER TABLE jobs ADD COLUMN noise_scale REAL"))
+                    conn.commit()
+                    logger.info("Migration completed successfully")
+                else:
+                    logger.debug("noise_scale column already exists, skipping migration")
 
             except Exception as e:
                 logger.error(f"Migration failed: {e}")

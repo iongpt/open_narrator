@@ -1,5 +1,6 @@
 """API routes for OpenNarrator."""
 
+import math
 import os
 from datetime import datetime
 from pathlib import Path
@@ -12,6 +13,7 @@ from fastapi import (
     File,
     Form,
     HTTPException,
+    Query,
     Request,
     UploadFile,
     status,
@@ -161,6 +163,8 @@ async def upload_file(
     voice_id: str = Form(...),
     context: str | None = Form(None),
     skip_translation: bool = Form(False),
+    length_scale: float | None = Form(1.0),
+    noise_scale: float | None = Form(1.0),
     db: Session = Depends(get_db),
 ) -> Job:
     """
@@ -230,6 +234,12 @@ async def upload_file(
             detail=f"Failed to save file: {str(e)}",
         ) from e
 
+    # Normalize scale sliders: treat 1.0 as "use model default"
+    if length_scale is not None and math.isclose(length_scale, 1.0, rel_tol=1e-3):
+        length_scale = None
+    if noise_scale is not None and math.isclose(noise_scale, 1.0, rel_tol=1e-3):
+        noise_scale = None
+
     # Create job in database
     job = Job(
         filename=safe_filename,
@@ -239,6 +249,8 @@ async def upload_file(
         voice_id=voice_id,
         context=context,
         skip_translation=skip_translation,
+        length_scale=length_scale,
+        noise_scale=noise_scale,
         status=JobStatus.PENDING,
         progress=0.0,
     )
@@ -431,7 +443,11 @@ async def list_voices(language: str | None = None) -> list[VoiceInfo]:
 
 
 @router.get("/voices/{voice_id}/preview")
-async def preview_voice(voice_id: str) -> FileResponse:
+async def preview_voice(
+    voice_id: str,
+    length_scale: float | None = Query(None, gt=0.1, lt=5.0),
+    noise_scale: float | None = Query(None, ge=0.0, lt=5.0),
+) -> FileResponse:
     """
     Generate and serve a preview audio sample for a voice.
 
@@ -479,13 +495,22 @@ async def preview_voice(voice_id: str) -> FileResponse:
             "tr": "Hoş geldiniz! Bu, çevrilmiş sesli kitabınız için ses örneğidir.",
         }
 
+        # Treat near-default slider values as None to use model config defaults
+        if length_scale is not None and math.isclose(length_scale, 1.0, rel_tol=1e-3):
+            length_scale = None
+        if noise_scale is not None and math.isclose(noise_scale, 1.0, rel_tol=1e-3):
+            noise_scale = None
+
         # Get sample text for voice language
         sample_text = sample_texts.get(voice_info.language, sample_texts["en"])
 
         # Check if sample already exists (CACHE)
         sample_dir = settings.static_dir / "voice_samples"
         sample_dir.mkdir(parents=True, exist_ok=True)
-        sample_path = sample_dir / f"{voice_id}.mp3"
+        ls_tag = "default" if length_scale is None else f"{length_scale:.2f}"
+        ns_tag = "default" if noise_scale is None else f"{noise_scale:.2f}"
+        sample_filename = f"{voice_id}_ls{ls_tag}_ns{ns_tag}.mp3"
+        sample_path = sample_dir / sample_filename
 
         # Return cached version if it exists
         if sample_path.exists():
@@ -493,7 +518,7 @@ async def preview_voice(voice_id: str) -> FileResponse:
             return FileResponse(
                 path=sample_path,
                 media_type="audio/mpeg",
-                filename=f"{voice_id}_sample.mp3",
+                filename=sample_filename,
             )
 
         # Generate sample if it doesn't exist
@@ -503,6 +528,8 @@ async def preview_voice(voice_id: str) -> FileResponse:
             text=sample_text,
             voice_id=voice_id,
             language=voice_info.language,
+            length_scale=length_scale,
+            noise_scale=noise_scale,
         )
 
         # Copy (not move) to samples directory
@@ -524,7 +551,7 @@ async def preview_voice(voice_id: str) -> FileResponse:
         return FileResponse(
             path=sample_path,
             media_type="audio/mpeg",
-            filename=f"{voice_id}_sample.mp3",
+            filename=sample_filename,
         )
 
     except ValueError as e:

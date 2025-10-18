@@ -7,6 +7,7 @@ from pathlib import Path
 
 import httpx
 from piper import PiperVoice
+from piper.config import SynthesisConfig
 from pydub import AudioSegment
 
 from app.config import get_settings
@@ -356,7 +357,15 @@ class PiperEngine(BaseTTSEngine):
         except Exception as e:
             raise RuntimeError(f"Failed to load voice {voice_id}: {str(e)}") from e
 
-    def generate_audio(self, text: str, voice_id: str, language: str) -> str:
+    def generate_audio(
+        self,
+        text: str,
+        voice_id: str,
+        language: str,
+        *,
+        length_scale: float | None = None,
+        noise_scale: float | None = None,
+    ) -> str:
         """
         Generate audio from text using the specified voice.
 
@@ -396,9 +405,22 @@ class PiperEngine(BaseTTSEngine):
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as wav_file:
                 wav_path = Path(wav_file.name)
 
+            config_kwargs: dict[str, float] = {}
+            if length_scale is not None:
+                config_kwargs["length_scale"] = length_scale
+            if noise_scale is not None:
+                config_kwargs["noise_scale"] = noise_scale
+
+            synthesis_config = SynthesisConfig(**config_kwargs) if config_kwargs else None
+
             # Generate audio
             with wave.open(str(wav_path), "wb") as wav_file:
-                voice.synthesize(text, wav_file)
+                voice.synthesize_wav(
+                    text,
+                    wav_file,
+                    syn_config=synthesis_config,
+                    set_wav_format=True,
+                )
 
             logger.info(f"Generated WAV audio: {wav_path}")
 
