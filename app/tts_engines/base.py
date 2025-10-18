@@ -23,6 +23,7 @@ class BaseTTSEngine(ABC):
         *,
         length_scale: float | None = None,
         noise_scale: float | None = None,
+        noise_w_scale: float | None = None,
     ) -> str:
         """
         Generate audio from text using the specified voice.
@@ -33,6 +34,7 @@ class BaseTTSEngine(ABC):
             language: Language code (e.g., 'en', 'ro', 'es')
             length_scale: Optional tempo multiplier (lower is faster, higher slower)
             noise_scale: Optional prosody randomness control
+            noise_w_scale: Optional phoneme width variation control
 
         Returns:
             Path to the generated audio file (MP3 format)

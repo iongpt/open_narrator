@@ -165,6 +165,7 @@ async def upload_file(
     skip_translation: bool = Form(False),
     length_scale: float | None = Form(1.0),
     noise_scale: float | None = Form(1.0),
+    noise_w_scale: float | None = Form(1.0),
     db: Session = Depends(get_db),
 ) -> Job:
     """
@@ -239,6 +240,8 @@ async def upload_file(
         length_scale = None
     if noise_scale is not None and math.isclose(noise_scale, 1.0, rel_tol=1e-3):
         noise_scale = None
+    if noise_w_scale is not None and math.isclose(noise_w_scale, 1.0, rel_tol=1e-3):
+        noise_w_scale = None
 
     # Create job in database
     job = Job(
@@ -251,6 +254,7 @@ async def upload_file(
         skip_translation=skip_translation,
         length_scale=length_scale,
         noise_scale=noise_scale,
+        noise_w_scale=noise_w_scale,
         status=JobStatus.PENDING,
         progress=0.0,
     )
@@ -270,6 +274,9 @@ async def upload_file(
         context=context or "",
         file_type=file_type,  # Pass file type to pipeline
         skip_translation=skip_translation,  # Pass skip_translation flag to pipeline
+        length_scale=length_scale,
+        noise_scale=noise_scale,
+        noise_w_scale=noise_w_scale,
     )
 
     return job
@@ -447,6 +454,7 @@ async def preview_voice(
     voice_id: str,
     length_scale: float | None = Query(None, gt=0.1, lt=5.0),
     noise_scale: float | None = Query(None, ge=0.0, lt=5.0),
+    noise_w_scale: float | None = Query(None, ge=0.0, lt=5.0),
 ) -> FileResponse:
     """
     Generate and serve a preview audio sample for a voice.
@@ -500,6 +508,8 @@ async def preview_voice(
             length_scale = None
         if noise_scale is not None and math.isclose(noise_scale, 1.0, rel_tol=1e-3):
             noise_scale = None
+        if noise_w_scale is not None and math.isclose(noise_w_scale, 1.0, rel_tol=1e-3):
+            noise_w_scale = None
 
         # Get sample text for voice language
         sample_text = sample_texts.get(voice_info.language, sample_texts["en"])
@@ -509,7 +519,8 @@ async def preview_voice(
         sample_dir.mkdir(parents=True, exist_ok=True)
         ls_tag = "default" if length_scale is None else f"{length_scale:.2f}"
         ns_tag = "default" if noise_scale is None else f"{noise_scale:.2f}"
-        sample_filename = f"{voice_id}_ls{ls_tag}_ns{ns_tag}.mp3"
+        nws_tag = "default" if noise_w_scale is None else f"{noise_w_scale:.2f}"
+        sample_filename = f"{voice_id}_ls{ls_tag}_ns{ns_tag}_nws{nws_tag}.mp3"
         sample_path = sample_dir / sample_filename
 
         # Return cached version if it exists
@@ -530,6 +541,7 @@ async def preview_voice(
             language=voice_info.language,
             length_scale=length_scale,
             noise_scale=noise_scale,
+            noise_w_scale=noise_w_scale,
         )
 
         # Copy (not move) to samples directory

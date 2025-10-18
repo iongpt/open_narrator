@@ -389,6 +389,7 @@ class PiperEngine(BaseTTSEngine):
         *,
         length_scale: float | None = None,
         noise_scale: float | None = None,
+        noise_w_scale: float | None = None,
     ) -> str:
         """
         Generate audio from text using the specified voice.
@@ -434,6 +435,8 @@ class PiperEngine(BaseTTSEngine):
                 config_kwargs["length_scale"] = length_scale
             if noise_scale is not None:
                 config_kwargs["noise_scale"] = noise_scale
+            if noise_w_scale is not None:
+                config_kwargs["noise_w_scale"] = noise_w_scale
 
             synthesis_config = SynthesisConfig(**config_kwargs) if config_kwargs else None
 

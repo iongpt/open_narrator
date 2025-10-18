@@ -47,6 +47,7 @@ class Job(Base):
     voice_id: Mapped[str] = mapped_column(String(100), nullable=False)
     length_scale: Mapped[float | None] = mapped_column(Float, nullable=True)
     noise_scale: Mapped[float | None] = mapped_column(Float, nullable=True)
+    noise_w_scale: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     # Context for translation
     context: Mapped[str | None] = mapped_column(Text, nullable=True)

@@ -18,6 +18,7 @@ class JobCreate(BaseModel):
     skip_translation: bool = Field(default=False)
     length_scale: float | None = Field(default=None, gt=0.1, lt=5.0)
     noise_scale: float | None = Field(default=None, ge=0.0, lt=5.0)
+    noise_w_scale: float | None = Field(default=None, ge=0.0, lt=5.0)
 
 
 class JobUpdate(BaseModel):
@@ -43,6 +44,7 @@ class JobResponse(BaseModel):
     skip_translation: bool
     length_scale: float | None
     noise_scale: float | None
+    noise_w_scale: float | None
     status: JobStatus
     progress: float
     error_message: str | None

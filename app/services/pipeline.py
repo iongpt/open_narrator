@@ -64,6 +64,9 @@ async def process_audio(
     context: str = "",
     file_type: str = "audio",
     skip_translation: bool = False,
+    length_scale: float | None = None,
+    noise_scale: float | None = None,
+    noise_w_scale: float | None = None,
 ) -> None:
     """
     Process an audio or text file through the complete translation pipeline.
@@ -96,6 +99,9 @@ async def process_audio(
         context: Optional context for translation (e.g., "mystery novel")
         file_type: Type of file - "audio" or "text" (default: "audio")
         skip_translation: Skip translation stage (content already in target language)
+        length_scale: Optional tempo override for TTS
+        noise_scale: Optional expressiveness override for TTS
+        noise_w_scale: Optional phoneme-width variation override for TTS
 
     Raises:
         None: All exceptions are caught and saved to job.error_message
@@ -464,6 +470,7 @@ async def process_audio(
                 job_id=job.id,
                 length_scale=job.length_scale,
                 noise_scale=job.noise_scale,
+                noise_w_scale=job.noise_w_scale,
             )
 
             logger.info(f"[Job {job_id}] Audio generation complete: {output_path}")

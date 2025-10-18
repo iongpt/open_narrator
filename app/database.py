@@ -74,6 +74,8 @@ def migrate_database() -> None:
                     missing_columns.add("length_scale")
                 if "noise_scale" not in columns:
                     missing_columns.add("noise_scale")
+                if "noise_w_scale" not in columns:
+                    missing_columns.add("noise_w_scale")
 
                 if "skip_translation" in missing_columns:
                     logger.info("Running migration: Adding skip_translation column to jobs table")
@@ -102,6 +104,14 @@ def migrate_database() -> None:
                     logger.info("Migration completed successfully")
                 else:
                     logger.debug("noise_scale column already exists, skipping migration")
+
+                if "noise_w_scale" in missing_columns:
+                    logger.info("Running migration: Adding noise_w_scale column to jobs table")
+                    conn.execute(text("ALTER TABLE jobs ADD COLUMN noise_w_scale REAL"))
+                    conn.commit()
+                    logger.info("Migration completed successfully")
+                else:
+                    logger.debug("noise_w_scale column already exists, skipping migration")
 
             except Exception as e:
                 logger.error(f"Migration failed: {e}")

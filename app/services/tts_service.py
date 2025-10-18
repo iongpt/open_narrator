@@ -77,6 +77,7 @@ class TTSService:
         job_id: int | None = None,
         length_scale: float | None = None,
         noise_scale: float | None = None,
+        noise_w_scale: float | None = None,
     ) -> str:
         """
         Generate audio from text with progress tracking.
@@ -89,6 +90,7 @@ class TTSService:
             job_id: Optional job identifier for collision-free filenames
             length_scale: Optional tempo multiplier (lower speeds up playback)
             noise_scale: Optional expressiveness multiplier (higher adds variation)
+            noise_w_scale: Optional phoneme-width variation for additional expressiveness
 
         Returns:
             Path to generated audio file (MP3)
@@ -121,6 +123,7 @@ class TTSService:
             job_id,
             length_scale,
             noise_scale,
+            noise_w_scale,
         )
 
     def _generate_audio_sync(
@@ -132,6 +135,7 @@ class TTSService:
         job_id: int | None,
         length_scale: float | None,
         noise_scale: float | None,
+        noise_w_scale: float | None,
     ) -> str:
         """Blocking audio generation executed inside a worker thread."""
         # Debug logging for TTS parameters
@@ -160,6 +164,7 @@ class TTSService:
                     language,
                     length_scale=length_scale,
                     noise_scale=noise_scale,
+                    noise_w_scale=noise_w_scale,
                 )
 
                 # Debug logging for TTS result
@@ -187,6 +192,7 @@ class TTSService:
             job_id,
             length_scale,
             noise_scale,
+            noise_w_scale,
         )
 
     def _generate_long_audio_sync(
@@ -198,6 +204,7 @@ class TTSService:
         job_id: int | None,
         length_scale: float | None,
         noise_scale: float | None,
+        noise_w_scale: float | None,
     ) -> str:
         """
         Generate audio for long text by splitting into chunks.
@@ -231,6 +238,7 @@ class TTSService:
                 language,
                 length_scale=length_scale,
                 noise_scale=noise_scale,
+                noise_w_scale=noise_w_scale,
             )
             audio_paths.append(chunk_path)
 
@@ -294,6 +302,7 @@ class TTSService:
         job_id: int | None,
         length_scale: float | None,
         noise_scale: float | None,
+        noise_w_scale: float | None,
     ) -> str:
         """
         Generate audio for multiple sentences with progress tracking.
@@ -329,6 +338,7 @@ class TTSService:
                 language,
                 length_scale=length_scale,
                 noise_scale=noise_scale,
+                noise_w_scale=noise_w_scale,
             )
             audio_paths.append(sentence_path)
 

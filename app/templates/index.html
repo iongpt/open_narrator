@@ -114,6 +114,17 @@
                         </div>
                         <p class="mt-1 text-xs text-slate-500">Reduce for clearer narration, increase for more variation. Leaving 1.00 keeps the model default.</p>
                     </div>
+
+                    <div>
+                        <label for="noise-w-scale" class="block text-sm font-medium text-slate-300 mb-2">
+                            Voice Variation <span class="text-slate-500">(0.00 – 1.50)</span>
+                        </label>
+                        <div class="flex items-center space-x-3">
+                            <input id="noise-w-scale" name="noise_w_scale" type="range" min="0.0" max="1.5" step="0.05" value="1.0" class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer">
+                            <span id="noise-w-scale-value" class="text-sm font-medium text-blue-400 w-16 text-right">1.00</span>
+                        </div>
+                        <p class="mt-1 text-xs text-slate-500">Controls phoneme timing variation. Combine with expressiveness for stronger style changes.</p>
+                    </div>
                 </div>
 
                 <!-- Context (Optional) -->
@@ -262,8 +273,10 @@
     const audioPlayer = document.getElementById('voice-preview-player');
     const lengthScaleInput = document.getElementById('length-scale');
     const noiseScaleInput = document.getElementById('noise-scale');
+    const noiseWScaleInput = document.getElementById('noise-w-scale');
     const lengthScaleValue = document.getElementById('length-scale-value');
     const noiseScaleValue = document.getElementById('noise-scale-value');
+    const noiseWScaleValue = document.getElementById('noise-w-scale-value');
 
     const formatScale = (value, suffix = '') => Number.parseFloat(value).toFixed(2) + suffix;
 
@@ -275,10 +288,16 @@
         noiseScaleValue.textContent = formatScale(noiseScaleInput.value);
     };
 
+    const updateNoiseWScaleDisplay = () => {
+        noiseWScaleValue.textContent = formatScale(noiseWScaleInput.value);
+    };
+
     lengthScaleInput.addEventListener('input', updateLengthScaleDisplay);
     noiseScaleInput.addEventListener('input', updateNoiseScaleDisplay);
+    noiseWScaleInput.addEventListener('input', updateNoiseWScaleDisplay);
     updateLengthScaleDisplay();
     updateNoiseScaleDisplay();
+    updateNoiseWScaleDisplay();
 
     targetLanguageSelect.addEventListener('change', async () => {
         const language = targetLanguageSelect.value;
@@ -341,6 +360,7 @@
             const params = new URLSearchParams();
             const lengthValue = Number.parseFloat(lengthScaleInput.value);
             const noiseValue = Number.parseFloat(noiseScaleInput.value);
+            const noiseWValue = Number.parseFloat(noiseWScaleInput.value);
 
             if (Math.abs(lengthValue - 1.0) > 0.001) {
                 params.set('length_scale', lengthValue.toString());
@@ -348,6 +368,10 @@
 
             if (Math.abs(noiseValue - 1.0) > 0.001) {
                 params.set('noise_scale', noiseValue.toString());
+            }
+
+            if (Math.abs(noiseWValue - 1.0) > 0.001) {
+                params.set('noise_w_scale', noiseWValue.toString());
             }
 
             const queryString = params.toString();
