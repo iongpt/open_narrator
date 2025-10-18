@@ -3,12 +3,28 @@
 import logging
 import tempfile
 import wave
+from dataclasses import dataclass
 from pathlib import Path
 
 import httpx
 from piper import PiperVoice
-from piper.config import SynthesisConfig
 from pydub import AudioSegment
+
+try:  # Piper <=1.2.0 may not expose SynthesisConfig
+    from piper.config import SynthesisConfig
+except ImportError:  # pragma: no cover - compatibility shim for older Piper builds
+
+    @dataclass
+    class SynthesisConfig:  # type: ignore[no-redef]
+        """Fallback synthesis config for older Piper releases."""
+
+        speaker_id: int | None = None
+        length_scale: float | None = None
+        noise_scale: float | None = None
+        noise_w_scale: float | None = None
+        normalize_audio: bool = True
+        volume: float = 1.0
+
 
 from app.config import get_settings
 from app.schemas import VoiceInfo
