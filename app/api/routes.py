@@ -453,6 +453,30 @@ async def stream_job_audio(job_id: int, db: Session = Depends(get_db)) -> FileRe
     )
 
 
+@router.get("/jobs/{job_id}/player", response_class=HTMLResponse)
+async def job_audio_player(
+    request: Request, job_id: int, db: Session = Depends(get_db)
+) -> HTMLResponse:
+    """Render a simple audio player page for a completed job."""
+
+    job = db.query(Job).filter(Job.id == job_id).first()
+
+    if not job or job.status != JobStatus.COMPLETED or not job.output_path:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Audio for job {job_id} not found",
+        )
+
+    return templates.TemplateResponse(
+        "audio_player.html",
+        {
+            "request": request,
+            "job": job,
+            "stream_url": f"/api/jobs/{job_id}/stream",
+        },
+    )
+
+
 @router.get("/voices", response_model=list[VoiceInfo])
 async def list_voices(language: str | None = None) -> list[VoiceInfo]:
     """

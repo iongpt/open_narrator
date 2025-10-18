@@ -77,15 +77,13 @@
                             Download
                         </a>
                         {% if job.output_path %}
-                        <button type="button"
-                                data-play-audio
-                                data-job-id="{{ job.id }}"
-                                class="inline-flex items-center px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors text-sm font-medium">
+                        <a href="/api/jobs/{{ job.id }}/player" target="_blank"
+                           class="inline-flex items-center px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors text-sm font-medium">
                             <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
                                 <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-1-11.5a.5.5 0 00-.78.41v6.18a.5.5 0 00.78.41l4.15-3.09a.5.5 0 000-.82L9 6.5z" clip-rule="evenodd" />
                             </svg>
                             Play
-                        </button>
+                        </a>
                         {% endif %}
                         {% endif %}
                         <button hx-delete="/api/jobs/{{ job.id }}"

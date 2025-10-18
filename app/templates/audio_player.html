@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto mt-10 space-y-6">
+    <div class="bg-slate-900 border border-slate-800 rounded-xl shadow-xl p-6">
+        <div class="flex items-center justify-between mb-4">
+            <div>
+                <h2 class="text-xl font-semibold text-white">{{ job.filename }}</h2>
+                <p class="text-sm text-slate-400">Generated on {{ job.completed_at.strftime('%Y-%m-%d %H:%M') if job.completed_at else job.created_at.strftime('%Y-%m-%d %H:%M') }}</p>
+            </div>
+            <a href="/api/jobs/{{ job.id }}/download" class="inline-flex items-center px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-500 transition-colors text-sm font-medium">
+                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                </svg>
+                Download
+            </a>
+        </div>
+
+        <div class="space-y-4">
+            <div class="flex items-center space-x-3">
+                <label for="player-playback-rate" class="text-sm text-slate-300">Playback Speed</label>
+                <select id="player-playback-rate" class="bg-slate-950 border border-slate-700 rounded px-3 py-2 text-white focus:outline-none">
+                    <option value="0.75">0.75×</option>
+                    <option value="1" selected>1.00×</option>
+                    <option value="1.25">1.25×</option>
+                    <option value="1.5">1.50×</option>
+                    <option value="1.75">1.75×</option>
+                    <option value="2">2.00×</option>
+                </select>
+            </div>
+            <audio id="job-audio-player" controls preload="metadata" class="w-full">
+                <source src="{{ stream_url }}" type="audio/mpeg">
+                Your browser does not support the audio element.
+            </audio>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    const audioPlayer = document.getElementById('job-audio-player');
+    const rateSelect = document.getElementById('player-playback-rate');
+    const storageKey = `playbackRate:job:{{ job.id }}`;
+
+    const storedRate = localStorage.getItem(storageKey);
+    if (storedRate) {
+        rateSelect.value = storedRate;
+        audioPlayer.playbackRate = Number.parseFloat(storedRate);
+    }
+
+    rateSelect.addEventListener('change', () => {
+        const newRate = Number.parseFloat(rateSelect.value);
+        audioPlayer.playbackRate = newRate;
+        localStorage.setItem(storageKey, newRate.toString());
+    });
+</script>
+{% endblock %}
