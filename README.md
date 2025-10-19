@@ -21,7 +21,7 @@ Perfect for translating audiobooks, podcasts, educational content, or converting
   - **Text-to-Audiobook**: Create audiobooks from text files (TXT, PDF, EPUB, MOBI, DOCX, RTF, ODT, HTML)
 - **High-Quality Speech Recognition**: Uses OpenAI's Whisper (large-v3) for accurate transcription
 - **Multi-Language Support**: Translate to 30+ languages including Romanian, Spanish, French, German, and more
-- **Natural Voice Synthesis**: Piper TTS with multiple voice options per language
+- **Natural Voice Synthesis**: Piper TTS plus Coqui VITS (Neon) and Meta MMS voices
 - **Context-Aware Translation**: Claude Sonnet 4.5 for natural, context-aware translations
 - **Wide Format Support**: Extract text from PDFs, EPUBs, MOBI ebooks, Word documents, and more
 - **CPU & GPU Support**: Automatically detects and uses available hardware
@@ -192,7 +192,7 @@ ANTHROPIC_API_KEY=your_api_key_here
 # Optional: Model configurations (defaults shown)
 WHISPER_MODEL=large-v3              # Options: tiny, base, small, medium, large-v3
 WHISPER_COMPUTE_TYPE=auto           # Options: auto, int8, float16
-TTS_ENGINE=piper                    # Currently only piper supported
+TTS_ENGINE=piper                    # Options: piper, coqui-neon, mms
 MAX_UPLOAD_SIZE_MB=500              # Maximum audio file size
 DEBUG=false                         # Set to true for verbose logging
 ```
@@ -281,7 +281,7 @@ Upload Document → Extract Text → Translate (Claude) → Synthesize (Piper) �
 1. **Text Extraction** (for documents): Intelligent extraction from PDF, EPUB, MOBI, DOCX, RTF, ODT, HTML
 2. **Speech-to-Text** (for audio): Whisper large-v3 transcribes audio to text with high accuracy
 3. **Translation**: Claude Sonnet 4.5 translates text with context awareness and natural language understanding
-4. **Text-to-Speech**: Piper TTS generates natural-sounding audio in 30+ languages with multiple voice options
+4. **Text-to-Speech**: Piper, Coqui (Neon VITS), and Meta MMS voices generate natural-sounding audio in 30+ languages
 
 ## ⚙️ Configuration
 
@@ -292,8 +292,28 @@ See `.env.example` for all available configuration options:
 - `ANTHROPIC_API_KEY`: Your Claude API key (required)
 - `WHISPER_MODEL`: Whisper model size (default: large-v3)
 - `WHISPER_COMPUTE_TYPE`: auto, int8, float16 (default: auto)
-- `TTS_ENGINE`: TTS engine to use (default: piper)
+- `TTS_ENGINE`: TTS engine to use (default: `piper`). Supported values: `piper`, `coqui-neon`, `mms`.
 - `MAX_UPLOAD_SIZE_MB`: Maximum file size (default: 50)
+
+### Romanian TTS voices
+
+- `coqui-neon`: Uses the Neon Common Voice Romanian VITS model published for the Coqui TTS runtime. Install the dependencies (`pip install -r requirements.txt`), then pre-download assets with:
+
+  ```bash
+  python -c "from app.services.tts_service import TTSService; TTSService().download_voice('coqui-neon:tts-vits-cv-ro')"
+  ```
+
+  The engine exposes the voice as `coqui-neon:tts-vits-cv-ro` in the UI.
+
+- `mms`: Wraps Meta's `facebook/mms-tts-ron` VITS checkpoint. Pre-download weights with:
+
+  ```bash
+  python -c "from app.services.tts_service import TTSService; TTSService().download_voice('mms:mms-tts-ron')"
+  ```
+
+  Select `mms:mms-tts-ron` in the interface to synthesize using the MMS model.
+
+Both engines place model files under `data/models/` so they can be reused across runs. Voice previews and jobs automatically namespace IDs (e.g., `coqui-neon:...`) to ensure the correct backend is selected.
 
 ### GPU Support
 

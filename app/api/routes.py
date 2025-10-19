@@ -488,15 +488,10 @@ async def list_voices(language: str | None = None) -> list[VoiceInfo]:
     Returns:
         List of available voices with metadata
     """
-    from app.services.tts_service import get_tts_engine
+    from app.services.tts_service import TTSService
 
-    # Get TTS engine (Piper by default)
-    engine = get_tts_engine()
-
-    # Get voices from engine
-    voices = engine.list_voices(language)
-
-    return voices
+    service = TTSService()
+    return service.list_voices(language)
 
 
 @router.get("/voices/{voice_id}/preview")
@@ -521,16 +516,14 @@ async def preview_voice(
     import logging
     import shutil
 
-    from app.services.tts_service import TTSService, get_tts_engine
+    from app.services.tts_service import TTSService
 
     logger = logging.getLogger(__name__)
 
     try:
-        # Get TTS engine
-        engine = get_tts_engine()
-
-        # Get voice info to determine language
-        voice_info = engine.get_voice_info(voice_id)
+        # Resolve voice metadata and appropriate engine
+        tts_service = TTSService()
+        voice_info = tts_service.get_voice_info(voice_id)
 
         # Sample text in different languages (pre-prepared)
         sample_texts = {
@@ -570,7 +563,8 @@ async def preview_voice(
         ls_tag = "default" if length_scale is None else f"{length_scale:.2f}"
         ns_tag = "default" if noise_scale is None else f"{noise_scale:.2f}"
         nws_tag = "default" if noise_w_scale is None else f"{noise_w_scale:.2f}"
-        sample_filename = f"{voice_id}_ls{ls_tag}_ns{ns_tag}_nws{nws_tag}.mp3"
+        safe_voice_id = voice_id.replace(":", "_")
+        sample_filename = f"{safe_voice_id}_ls{ls_tag}_ns{ns_tag}_nws{nws_tag}.mp3"
         sample_path = sample_dir / sample_filename
 
         # Return cached version if it exists
@@ -584,7 +578,6 @@ async def preview_voice(
 
         # Generate sample if it doesn't exist
         logger.info(f"Generating new voice preview for {voice_id}")
-        tts_service = TTSService(engine)
         audio_path = await tts_service.generate_audio(
             text=sample_text,
             voice_id=voice_id,

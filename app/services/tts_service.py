@@ -8,8 +8,8 @@ from uuid import uuid4
 
 from app.config import get_settings
 from app.schemas import VoiceInfo
+from app.tts_engines import ENGINE_LABELS, ENGINE_REGISTRY
 from app.tts_engines.base import BaseTTSEngine
-from app.tts_engines.piper import PiperEngine
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -32,19 +32,13 @@ def get_tts_engine(engine_name: str | None = None) -> BaseTTSEngine:
     if engine_name is None:
         engine_name = settings.tts_engine
 
-    engines = {
-        "piper": PiperEngine,
-        # Easy to add more engines:
-        # "xtts": XTTSEngine,
-        # "coqui": CoquiEngine,
-    }
-
-    if engine_name not in engines:
+    if engine_name not in ENGINE_REGISTRY:
         raise ValueError(
-            f"Unknown TTS engine: {engine_name}. " f"Available engines: {', '.join(engines.keys())}"
+            f"Unknown TTS engine: {engine_name}. "
+            f"Available engines: {', '.join(sorted(ENGINE_REGISTRY.keys()))}"
         )
 
-    return engines[engine_name]()
+    return ENGINE_REGISTRY[engine_name]()
 
 
 class TTSService:
@@ -65,7 +59,38 @@ class TTSService:
         Args:
             engine: TTS engine to use. If None, uses default from settings.
         """
-        self.engine = engine or get_tts_engine()
+        self._engine_instances: dict[str, BaseTTSEngine] = {}
+
+        if engine is not None:
+            engine_name = self._resolve_engine_name(engine)
+            self._engine_instances[engine_name] = engine
+            self._default_engine_name = engine_name
+        else:
+            self._default_engine_name = settings.tts_engine
+
+    def _resolve_engine_name(self, engine: BaseTTSEngine) -> str:
+        for name, engine_cls in ENGINE_REGISTRY.items():
+            if isinstance(engine, engine_cls):
+                return name
+        raise ValueError(f"Unregistered engine instance: {engine.__class__.__name__}")
+
+    def _get_engine(self, engine_name: str) -> BaseTTSEngine:
+        if engine_name not in ENGINE_REGISTRY:
+            raise ValueError(
+                f"Unknown TTS engine: {engine_name}. "
+                f"Available engines: {', '.join(sorted(ENGINE_REGISTRY.keys()))}"
+            )
+
+        if engine_name not in self._engine_instances:
+            self._engine_instances[engine_name] = get_tts_engine(engine_name)
+
+        return self._engine_instances[engine_name]
+
+    def _parse_voice_identifier(self, voice_id: str) -> tuple[str, str]:
+        if ":" in voice_id:
+            engine_name, raw_voice_id = voice_id.split(":", 1)
+            return engine_name, raw_voice_id
+        return self._default_engine_name, voice_id
 
     async def generate_audio(
         self,
@@ -102,7 +127,16 @@ class TTSService:
         if not text:
             raise ValueError("Text cannot be empty")
 
-        logger.info(f"Generating audio: {len(text)} chars, voice={voice_id}, lang={language}")
+        engine_name, raw_voice_id = self._parse_voice_identifier(voice_id)
+        self._get_engine(engine_name)
+
+        logger.info(
+            "Generating audio: %s chars, engine=%s, voice=%s, lang=%s",
+            len(text),
+            engine_name,
+            raw_voice_id,
+            language,
+        )
 
         loop = asyncio.get_running_loop()
 
@@ -116,8 +150,9 @@ class TTSService:
 
         return await asyncio.to_thread(
             self._generate_audio_sync,
+            engine_name,
             text,
-            voice_id,
+            raw_voice_id,
             language,
             thread_progress if progress_callback else None,
             job_id,
@@ -128,6 +163,7 @@ class TTSService:
 
     def _generate_audio_sync(
         self,
+        engine_name: str,
         text: str,
         voice_id: str,
         language: str,
@@ -145,7 +181,7 @@ class TTSService:
             logger.debug(f"Voice ID: {voice_id}")
             logger.debug(f"Language: {language}")
             logger.debug(f"Job ID: {job_id}")
-            logger.debug(f"Engine: {self.engine.__class__.__name__}")
+            logger.debug(f"Engine: {engine_name}")
             logger.debug(f"Text Length: {len(text)} characters")
             logger.debug(f"Text Preview:\n{text[:500]}..." if len(text) > 500 else f"Text:\n{text}")
             logger.debug("=" * 80)
@@ -158,7 +194,8 @@ class TTSService:
         if len(sentences) <= 2:
             logger.info(f"Generating audio for short text ({len(sentences)} sentence(s))")
             try:
-                output_path = self.engine.generate_audio(
+                engine = self._get_engine(engine_name)
+                output_path = engine.generate_audio(
                     text,
                     voice_id,
                     language,
@@ -193,10 +230,12 @@ class TTSService:
             length_scale,
             noise_scale,
             noise_w_scale,
+            engine_name=engine_name,
         )
 
     def _generate_long_audio_sync(
         self,
+        engine_name: str,
         text: str,
         voice_id: str,
         language: str,
@@ -230,9 +269,11 @@ class TTSService:
         audio_paths: list[str] = []
         combined_audio = AudioSegment.empty()
 
+        engine = self._get_engine(engine_name)
+
         for i, chunk in enumerate(chunks):
             logger.info(f"Generating chunk {i + 1}/{len(chunks)}")
-            chunk_path = self.engine.generate_audio(
+            chunk_path = engine.generate_audio(
                 chunk,
                 voice_id,
                 language,
@@ -251,7 +292,8 @@ class TTSService:
 
         unique_suffix = uuid4().hex[:8]
         job_prefix = f"job{job_id}_" if job_id is not None else ""
-        output_path = settings.output_dir / f"{job_prefix}{voice_id}_{unique_suffix}.mp3"
+        safe_voice_id = voice_id.replace(":", "_")
+        output_path = settings.output_dir / f"{job_prefix}{safe_voice_id}_{unique_suffix}.mp3"
         combined_audio.export(
             str(output_path),
             format="mp3",
@@ -303,36 +345,24 @@ class TTSService:
         length_scale: float | None,
         noise_scale: float | None,
         noise_w_scale: float | None,
+        *,
+        engine_name: str,
     ) -> str:
-        """
-        Generate audio for multiple sentences with progress tracking.
-
-        Args:
-            sentences: List of sentences to generate audio for
-            voice_id: Voice ID to use
-            language: Language code
-            progress_callback: Optional progress callback
-            job_id: Optional job identifier for unique filenames
-
-        Returns:
-            Path to combined audio file
-
-        Raises:
-            RuntimeError: If audio generation or concatenation fails
-        """
+        """Generate audio for multiple sentences with progress tracking."""
         from pydub import AudioSegment
 
+        engine = self._get_engine(engine_name)
+
         total_sentences = len(sentences)
-        logger.info(f"Generating audio for {total_sentences} sentences")
+        logger.info("Generating audio for %s sentences with %s", total_sentences, engine_name)
 
         audio_paths: list[str] = []
         combined_audio = AudioSegment.empty()
 
-        for i, sentence in enumerate(sentences):
-            logger.info(f"Generating sentence {i + 1}/{total_sentences}")
+        for index, sentence in enumerate(sentences, start=1):
+            logger.info("Generating sentence %s/%s", index, total_sentences)
 
-            # Generate audio for this sentence
-            sentence_path = self.engine.generate_audio(
+            sentence_path = engine.generate_audio(
                 sentence,
                 voice_id,
                 language,
@@ -342,21 +372,17 @@ class TTSService:
             )
             audio_paths.append(sentence_path)
 
-            # Add to combined audio
             sentence_audio = AudioSegment.from_mp3(sentence_path)
             combined_audio += sentence_audio
 
-            # Report progress
             if progress_callback:
-                progress = (i + 1) / total_sentences
+                progress = index / total_sentences
                 progress_callback(progress)
-
-        # Save combined audio
-        from uuid import uuid4
 
         unique_suffix = uuid4().hex[:8]
         job_prefix = f"job{job_id}_" if job_id is not None else ""
-        output_path = settings.output_dir / f"{job_prefix}{voice_id}_{unique_suffix}.mp3"
+        safe_voice_id = voice_id.replace(":", "_")
+        output_path = settings.output_dir / f"{job_prefix}{safe_voice_id}_{unique_suffix}.mp3"
 
         combined_audio.export(
             str(output_path),
@@ -365,14 +391,13 @@ class TTSService:
             parameters=["-ar", "22050"],
         )
 
-        logger.info(f"Generated combined audio: {output_path}")
+        logger.info("Generated combined audio: %s", output_path)
 
-        # Clean up individual sentence files
         for path in audio_paths:
             try:
                 Path(path).unlink()
             except Exception as exc:  # pragma: no cover - cleanup best-effort
-                logger.warning(f"Failed to delete sentence file {path}: {exc}")
+                logger.warning("Failed to delete sentence file %s: %s", path, exc)
 
         if progress_callback:
             progress_callback(1.0)
@@ -429,7 +454,29 @@ class TTSService:
         Returns:
             List of available voices
         """
-        return self.engine.list_voices(language)
+        voices: list[VoiceInfo] = []
+        for engine_name in ENGINE_REGISTRY:
+            try:
+                engine = self._get_engine(engine_name)
+                engine_voices = engine.list_voices(language)
+            except Exception as exc:  # pragma: no cover - best-effort aggregation
+                logger.warning("Failed to list voices for engine %s: %s", engine_name, exc)
+                continue
+
+            label = ENGINE_LABELS.get(engine_name, engine_name.title())
+            for voice in engine_voices:
+                voices.append(
+                    VoiceInfo(
+                        id=f"{engine_name}:{voice.id}",
+                        name=f"{voice.name} ({label})",
+                        language=voice.language,
+                        gender=voice.gender,
+                        quality=voice.quality,
+                        sample_url=voice.sample_url,
+                    )
+                )
+
+        return voices
 
     def get_voice_info(self, voice_id: str) -> VoiceInfo:
         """
@@ -444,7 +491,18 @@ class TTSService:
         Raises:
             ValueError: If voice_id is not found
         """
-        return self.engine.get_voice_info(voice_id)
+        engine_name, raw_voice_id = self._parse_voice_identifier(voice_id)
+        engine = self._get_engine(engine_name)
+        info = engine.get_voice_info(raw_voice_id)
+        label = ENGINE_LABELS.get(engine_name, engine_name.title())
+        return VoiceInfo(
+            id=f"{engine_name}:{info.id}",
+            name=f"{info.name} ({label})",
+            language=info.language,
+            gender=info.gender,
+            quality=info.quality,
+            sample_url=info.sample_url,
+        )
 
     def is_voice_available(self, voice_id: str) -> bool:
         """
@@ -456,7 +514,9 @@ class TTSService:
         Returns:
             True if voice is available, False otherwise
         """
-        return self.engine.is_voice_available(voice_id)
+        engine_name, raw_voice_id = self._parse_voice_identifier(voice_id)
+        engine = self._get_engine(engine_name)
+        return engine.is_voice_available(raw_voice_id)
 
     def download_voice(self, voice_id: str) -> None:
         """
@@ -469,4 +529,6 @@ class TTSService:
             ValueError: If voice_id is invalid
             RuntimeError: If download fails
         """
-        self.engine.download_voice(voice_id)
+        engine_name, raw_voice_id = self._parse_voice_identifier(voice_id)
+        engine = self._get_engine(engine_name)
+        engine.download_voice(raw_voice_id)

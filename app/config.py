@@ -62,7 +62,7 @@ class Settings(BaseSettings):
     translation_max_output_tokens: int = 64000  # Max output tokens from LLM
 
     # TTS Settings
-    tts_engine: Literal["piper"] = "piper"
+    tts_engine: Literal["piper", "coqui-neon", "mms"] = "piper"
 
     @property
     def device(self) -> str:
