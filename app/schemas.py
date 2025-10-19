@@ -85,3 +85,18 @@ class SettingsUpdate(BaseModel):
     anthropic_api_key: str | None = None
     whisper_model: str | None = None
     tts_engine: str | None = None
+
+
+class BulkPreset(BaseModel):
+    """Schema describing bulk folder processing options."""
+
+    input_dir: str
+    output_dir: str
+    source_language: str = Field(default="en", min_length=2, max_length=10)
+    target_language: str = Field(default="", min_length=0, max_length=10)
+    voice_id: str = Field(default="", min_length=0, max_length=100)
+    context: str | None = Field(default=None, max_length=5000)
+    skip_translation: bool = False
+    length_scale: float | None = Field(default=None, gt=0.1, lt=5.0)
+    noise_scale: float | None = Field(default=None, ge=0.0, lt=5.0)
+    noise_w_scale: float | None = Field(default=None, ge=0.0, lt=5.0)

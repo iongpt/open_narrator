@@ -13,6 +13,7 @@ class JobStatus(str, PyEnum):
     """Job processing status."""
 
     PENDING = "pending"
+    DISPATCHING = "dispatching"
     TRANSCRIBING = "transcribing"
     TRANSCRIBED = "transcribed"
     TRANSLATING = "translating"
@@ -38,6 +39,7 @@ class Job(Base):
     filename: Mapped[str] = mapped_column(String(255), nullable=False)
     original_path: Mapped[str] = mapped_column(String(500), nullable=False)
     output_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    target_output_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     # Language settings
     source_language: Mapped[str] = mapped_column(String(10), default="en")
@@ -54,6 +56,7 @@ class Job(Base):
 
     # Skip translation flag (content already in target language)
     skip_translation: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    cleanup_original: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     # Processing status
     status: Mapped[JobStatus] = mapped_column(

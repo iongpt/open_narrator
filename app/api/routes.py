@@ -8,7 +8,6 @@ from uuid import uuid4
 
 from fastapi import (
     APIRouter,
-    BackgroundTasks,
     Depends,
     File,
     Form,
@@ -22,70 +21,23 @@ from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
+from app.api.websocket import send_progress_update
 from app.config import get_settings
+from app.constants import (
+    ALLOWED_AUDIO_EXTENSIONS,
+    ALLOWED_AUDIO_TYPES,
+    ALLOWED_TEXT_EXTENSIONS,
+    ALLOWED_TEXT_TYPES,
+)
 from app.database import get_db
 from app.models import Job, JobStatus
-from app.schemas import JobResponse, SettingsUpdate, VoiceInfo
-from app.services.pipeline import process_audio
+from app.schemas import BulkPreset, JobResponse, ProgressUpdate, SettingsUpdate, VoiceInfo
+from app.services.bulk_preset import load_bulk_preset, save_bulk_preset
 
 router = APIRouter()
 settings = get_settings()
 templates = Jinja2Templates(directory="app/templates")
 
-
-# File upload validation
-ALLOWED_AUDIO_EXTENSIONS = {
-    ".mp3",
-    ".wav",
-    ".m4a",
-    ".ogg",
-    ".flac",
-    ".mp4",
-}
-
-ALLOWED_AUDIO_TYPES = {
-    "audio/mpeg",
-    "audio/mp3",
-    "audio/x-mp3",
-    "audio/mpeg3",
-    "audio/x-mpeg-3",
-    "audio/wav",
-    "audio/x-wav",
-    "audio/wave",
-    "audio/mp4",
-    "audio/m4a",
-    "audio/x-m4a",
-    "audio/ogg",
-    "audio/flac",
-}
-
-ALLOWED_TEXT_TYPES = {
-    "text/plain",
-    "text/markdown",
-    "text/html",
-    "application/pdf",
-    "application/epub+zip",
-    "application/x-mobipocket-ebook",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",  # DOCX
-    "application/msword",  # DOC
-    "application/rtf",
-    "text/rtf",
-    "application/vnd.oasis.opendocument.text",  # ODT
-}
-
-ALLOWED_TEXT_EXTENSIONS = {
-    ".txt",
-    ".md",
-    ".pdf",
-    ".epub",
-    ".mobi",
-    ".docx",
-    ".doc",
-    ".rtf",
-    ".odt",
-    ".html",
-    ".htm",
-}
 
 MAX_FILE_SIZE = settings.max_upload_size_mb * 1024 * 1024  # Convert to bytes
 
@@ -156,7 +108,6 @@ def sanitize_filename(filename: str) -> str:
 
 @router.post("/upload", response_model=JobResponse, status_code=status.HTTP_201_CREATED)
 async def upload_file(
-    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     source_language: str = Form("en"),
     target_language: str = Form(...),
@@ -172,7 +123,6 @@ async def upload_file(
     Upload an audio or text file for translation.
 
     Args:
-        background_tasks: FastAPI background tasks manager
         file: The audio or text file to upload
         source_language: Source language code (default: en)
         target_language: Target language code
@@ -257,29 +207,52 @@ async def upload_file(
         noise_w_scale=noise_w_scale,
         status=JobStatus.PENDING,
         progress=0.0,
+        cleanup_original=True,
     )
 
     db.add(job)
     db.commit()
     db.refresh(job)
 
-    # Trigger background processing task
-    background_tasks.add_task(
-        process_audio,
-        job_id=job.id,
-        file_path=str(file_path),
-        source_lang=source_language,
-        target_lang=target_language,
-        voice_id=voice_id,
-        context=context or "",
-        file_type=file_type,  # Pass file type to pipeline
-        skip_translation=skip_translation,  # Pass skip_translation flag to pipeline
-        length_scale=length_scale,
-        noise_scale=noise_scale,
-        noise_w_scale=noise_w_scale,
+    # Notify UI clients that the job entered the queue; dispatcher will pick it up shortly.
+    await send_progress_update(
+        ProgressUpdate(
+            job_id=job.id,
+            status=job.status,
+            progress=job.progress,
+            message="Job queued for processing",
+        )
     )
 
     return job
+
+
+@router.get("/bulk-preset", response_model=BulkPreset)
+async def get_bulk_preset_settings() -> BulkPreset:
+    """Return the current bulk processing preset or defaults."""
+
+    preset = load_bulk_preset()
+    if preset:
+        return preset
+
+    settings = get_settings()
+    return BulkPreset(
+        input_dir=str(settings.bulk_input_dir),
+        output_dir=str(settings.bulk_output_dir),
+        source_language="en",
+        target_language="",
+        voice_id="",
+        context="",
+        skip_translation=False,
+    )
+
+
+@router.post("/bulk-preset", response_model=BulkPreset)
+async def update_bulk_preset_settings(preset: BulkPreset) -> BulkPreset:
+    """Write the bulk processing preset to disk."""
+
+    save_bulk_preset(preset)
+    return preset
 
 
 @router.get("/jobs", response_model=list[JobResponse])

@@ -18,10 +18,14 @@ from fastapi.templating import Jinja2Templates
 from app.api import routes, websocket
 from app.config import VERSION, get_settings
 from app.database import init_db, migrate_database
+from app.services.bulk_worker import BulkIngestWorker
+from app.services.job_dispatcher import JobDispatcher
 
 templates = Jinja2Templates(directory="app/templates")
 
 settings = get_settings()
+dispatcher = JobDispatcher()
+bulk_worker = BulkIngestWorker()
 
 
 def configure_logging() -> None:
@@ -98,9 +102,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     migrate_database()
     logger.info("Database migrations completed")
 
-    yield
-    # Shutdown (cleanup if needed)
-    logger.info("Shutting down OpenNarrator application...")
+    await dispatcher.start()
+    await bulk_worker.start()
+
+    try:
+        yield
+    finally:
+        # Shutdown (cleanup if needed)
+        logger.info("Shutting down OpenNarrator application...")
+        await bulk_worker.stop()
+        await dispatcher.stop()
 
 
 # Create FastAPI application

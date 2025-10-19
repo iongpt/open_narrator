@@ -76,6 +76,10 @@ def migrate_database() -> None:
                     missing_columns.add("noise_scale")
                 if "noise_w_scale" not in columns:
                     missing_columns.add("noise_w_scale")
+                if "target_output_path" not in columns:
+                    missing_columns.add("target_output_path")
+                if "cleanup_original" not in columns:
+                    missing_columns.add("cleanup_original")
 
                 if "skip_translation" in missing_columns:
                     logger.info("Running migration: Adding skip_translation column to jobs table")
@@ -112,6 +116,26 @@ def migrate_database() -> None:
                     logger.info("Migration completed successfully")
                 else:
                     logger.debug("noise_w_scale column already exists, skipping migration")
+
+                if "target_output_path" in missing_columns:
+                    logger.info("Running migration: Adding target_output_path column to jobs table")
+                    conn.execute(text("ALTER TABLE jobs ADD COLUMN target_output_path TEXT"))
+                    conn.commit()
+                    logger.info("Migration completed successfully")
+                else:
+                    logger.debug("target_output_path column already exists, skipping migration")
+
+                if "cleanup_original" in missing_columns:
+                    logger.info("Running migration: Adding cleanup_original column to jobs table")
+                    conn.execute(
+                        text(
+                            "ALTER TABLE jobs ADD COLUMN cleanup_original BOOLEAN DEFAULT 0 NOT NULL"
+                        )
+                    )
+                    conn.commit()
+                    logger.info("Migration completed successfully")
+                else:
+                    logger.debug("cleanup_original column already exists, skipping migration")
 
             except Exception as e:
                 logger.error(f"Migration failed: {e}")
