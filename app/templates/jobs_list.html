@@ -1,4 +1,22 @@
 {% if jobs %}
+    {% set counts = namespace(queued=0, active=0) %}
+    {% for job in jobs %}
+        {% if job.status in ['pending', 'dispatching'] %}
+            {% set counts.queued = counts.queued + 1 %}
+        {% elif job.status not in ['completed', 'failed'] %}
+            {% set counts.active = counts.active + 1 %}
+        {% endif %}
+    {% endfor %}
+
+    <div class="flex flex-wrap gap-2 mb-4 text-sm">
+        <span class="px-3 py-1 rounded-full bg-slate-800 text-slate-200">
+            Queued: {{ counts.queued }}
+        </span>
+        <span class="px-3 py-1 rounded-full bg-slate-800 text-slate-200">
+            Active: {{ counts.active }}
+        </span>
+    </div>
+
     <div class="space-y-4">
         {% for job in jobs %}
         <div class="border border-slate-700 rounded-lg p-4 hover:bg-slate-800/50 transition-all bg-slate-950" data-job-id="{{ job.id }}">
@@ -20,6 +38,8 @@
                     <span class="status-message">
                         {% if job.status == 'pending' %}
                             Waiting to start...
+                        {% elif job.status == 'dispatching' %}
+                            Assigning worker...
                         {% elif job.status == 'transcribing' %}
                             Transcribing audio...
                         {% elif job.status == 'transcribed' %}

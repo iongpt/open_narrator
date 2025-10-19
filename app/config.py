@@ -45,6 +45,14 @@ class Settings(BaseSettings):
     debug_dir: Path = Path("./data/debug")  # Debug files (transcripts, translations)
     static_dir: Path = Path("./app/static")  # Static files (voice samples, etc.)
     max_upload_size_mb: int = 50
+    bulk_input_dir: Path = Path("./data/bulk/input")
+    bulk_output_dir: Path = Path("./data/bulk/output")
+    bulk_preset_path: Path = Path("./data/bulk/preset.json")
+
+    # Job Dispatcher
+    max_concurrent_jobs: int = 1
+    dispatcher_poll_interval_seconds: float = 1.0
+    bulk_scan_interval_seconds: float = 60.0
 
     # AI Services
     anthropic_api_key: str = ""
@@ -93,6 +101,9 @@ class Settings(BaseSettings):
         self.model_dir.mkdir(parents=True, exist_ok=True)
         self.debug_dir.mkdir(parents=True, exist_ok=True)
         self.static_dir.mkdir(parents=True, exist_ok=True)
+        self.bulk_input_dir.mkdir(parents=True, exist_ok=True)
+        self.bulk_output_dir.mkdir(parents=True, exist_ok=True)
+        self.bulk_preset_path.parent.mkdir(parents=True, exist_ok=True)
 
 
 @lru_cache

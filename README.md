@@ -132,7 +132,42 @@ services:
     #           capabilities: [gpu]
 EOF
 ```
+### For bulk
+```angular2html
+Typical setup
 
+  1. Pick host folders, e.g.
+      - raw books: /Users/edi/media/books
+      - finished audio: /Users/edi/media/audiobooks
+  2. Add bind mounts to the compose (or docker run) command, mapping host paths → container paths that match the preset/env values. Example docker-
+  compose.yml snippet:
+
+  services:
+    app:
+      volumes:
+        - ./data:/app/data
+        - /Users/edi/media/books:/app/data/bulk/input
+        - /Users/edi/media/audiobooks:/app/data/bulk/output
+      env_file:
+        - .env
+
+  If you’re not using docker-compose, the equivalent docker run flags are:
+
+  docker run \
+    -v /Users/edi/media/books:/app/data/bulk/input \
+    -v /Users/edi/media/audiobooks:/app/data/bulk/output \
+    …
+
+  3. In .env (or through the UI panel) set:
+
+  BULK_INPUT_DIR=/app/data/bulk/input
+  BULK_OUTPUT_DIR=/app/data/bulk/output
+
+  Those settings tell the worker where to look, while the bind mounts make those paths point at your host folders. After you save the bulk preset (target
+  language, voice, etc.), anything you drop into the mounted input tree will be picked up automatically and the finished MP3s will land in the mirrored
+  structure under the output mount.
+
+```
 4. **Start the application**
 
 ```bash
@@ -194,6 +229,7 @@ WHISPER_MODEL=large-v3              # Options: tiny, base, small, medium, large-
 WHISPER_COMPUTE_TYPE=auto           # Options: auto, int8, float16
 TTS_ENGINE=piper                    # Options: piper, coqui-neon, mms
 MAX_UPLOAD_SIZE_MB=500              # Maximum audio file size
+MAX_CONCURRENT_JOBS=1              # Number of pipeline jobs to run in parallel
 DEBUG=false                         # Set to true for verbose logging
 ```
 
@@ -294,6 +330,11 @@ See `.env.example` for all available configuration options:
 - `WHISPER_COMPUTE_TYPE`: auto, int8, float16 (default: auto)
 - `TTS_ENGINE`: TTS engine to use (default: `piper`). Supported values: `piper`, `coqui-neon`, `mms`.
 - `MAX_UPLOAD_SIZE_MB`: Maximum file size (default: 50)
+- `MAX_CONCURRENT_JOBS`: Parallel pipelines allowed by the dispatcher (default: 1)
+- `BULK_INPUT_DIR`: Folder scanned for bulk processing jobs (default: `./data/bulk/input`)
+- `BULK_OUTPUT_DIR`: Destination root for bulk outputs (default: `./data/bulk/output`)
+- `BULK_PRESET_PATH`: Location of the bulk preset JSON file (default: `./data/bulk/preset.json`)
+- `BULK_SCAN_INTERVAL_SECONDS`: Polling interval for the bulk watcher (default: 60)
 
 ### Romanian TTS voices
 
@@ -316,6 +357,14 @@ See `.env.example` for all available configuration options:
 Both engines place model files under `data/models/` so they can be reused across runs. Voice previews and jobs automatically namespace IDs (e.g., `coqui-neon:...`) to ensure the correct backend is selected.
 
 ### GPU Support
+
+### Bulk Folder Processing
+
+- Mount your source directory into the container (e.g., `/mnt/media/books`) and point `BULK_INPUT_DIR` at it.
+- Mount a second directory for finished audio (e.g., `/mnt/media/audiobooks`) and set `BULK_OUTPUT_DIR` accordingly.
+- Use the “Bulk Folder Processing” panel in the UI to save the preset (languages, voice, context, optional TTS tweaks).
+- The watcher polls the input folder every poll interval (default 60 s) and queues each new file once. Directory structure is mirrored under the output root, and original files are deleted after successful conversion.
+- Jobs appear in the main queue alongside manual uploads so you can monitor progress in one place.
 
 To enable GPU acceleration, uncomment the GPU section in `docker-compose.yml`:
 

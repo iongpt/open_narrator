@@ -6,6 +6,7 @@ with progress tracking, error handling, and database updates at each stage.
 
 import asyncio
 import logging
+import shutil
 from collections.abc import Coroutine
 from datetime import datetime
 from pathlib import Path
@@ -15,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.api.websocket import send_progress_update
 from app.config import get_settings
+from app.constants import ALLOWED_TEXT_EXTENSIONS
 from app.database import SessionLocal
 from app.models import Job, JobStatus
 from app.schemas import ProgressUpdate
@@ -25,6 +27,13 @@ from app.services.tts_service import TTSService
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
+
+
+def _infer_file_type(file_path: str, fallback: str = "audio") -> str:
+    """Infer file type based on extension when dispatcher metadata is missing."""
+
+    suffix = Path(file_path).suffix.lower()
+    return "text" if suffix in ALLOWED_TEXT_EXTENSIONS else fallback
 
 
 def _schedule_progress_task(coro: Coroutine[Any, Any, None], job_id: int, stage: str) -> None:
@@ -107,6 +116,9 @@ async def process_audio(
     Raises:
         None: All exceptions are caught and saved to job.error_message
     """
+    # Derive file type if dispatcher/route omits the hint (e.g., after restart)
+    file_type = file_type or _infer_file_type(file_path)
+
     # Create a new database session for this background task
     db = SessionLocal()
     preprocessor = TextPreprocessor()
@@ -482,8 +494,17 @@ async def process_audio(
             if not Path(output_path).exists():
                 raise RuntimeError(f"Output file not found: {output_path}")
 
+            # Move output to target path if configured
+            final_output_path = Path(output_path)
+            if job.target_output_path:
+                target_path = Path(job.target_output_path)
+                target_path.parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(final_output_path), target_path)
+                logger.info("[Job %s] Moved output to target path: %s", job_id, target_path)
+                final_output_path = target_path
+
             # Save output path to database
-            job.output_path = output_path
+            job.output_path = str(final_output_path)
             job.progress = 95.0
             db.commit()
             db.refresh(job)
@@ -537,14 +558,36 @@ async def process_audio(
             try:
                 original_file = Path(file_path)
                 if original_file.exists():
-                    if original_file.suffix == ".wav" and original_file.name.startswith("tmp"):
-                        logger.info(f"Cleaning up temporary file: {original_file}")
+                    cleaned = False
+
+                    if job.cleanup_original:
                         original_file.unlink()
+                        cleaned = True
+                        logger.info("[Job %s] Deleted original file: %s", job_id, original_file)
+
+                    elif original_file.suffix == ".wav" and original_file.name.startswith("tmp"):
+                        original_file.unlink()
+                        cleaned = True
+                        logger.info(
+                            "[Job %s] Cleaning up temporary file: %s", job_id, original_file
+                        )
                     else:
                         resolved_upload_dir = settings.upload_dir.resolve()
                         if resolved_upload_dir in original_file.resolve().parents:
-                            logger.info(f"Removing original upload file: {original_file}")
                             original_file.unlink()
+                            cleaned = True
+                            logger.info(
+                                "[Job %s] Removing original upload file: %s",
+                                job_id,
+                                original_file,
+                            )
+
+                    if not cleaned:
+                        logger.debug(
+                            "[Job %s] Skipping cleanup for original file outside managed directories: %s",
+                            job_id,
+                            original_file,
+                        )
             except Exception as e:
                 logger.warning(f"Failed to clean up uploaded file: {str(e)}")
 
